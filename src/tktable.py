@@ -1,6 +1,8 @@
 import tkinter as tk
 import re
 
+import src.utils as utils
+
 class Spreadsheet(tk.Frame):
     def _on_entry_keystroke(self, sv):
         print(sv.get())
@@ -17,39 +19,35 @@ class Spreadsheet(tk.Frame):
 
         return True
 
-    def fullname(self, o):
-        return o.__module__ + "." + o.__class__.__qualname__
-
     def _restore_borders(self, new):
+        if type(new) != list:
+            new = [new]
         for old in self._selected_cells:
             if old not in new:
                 old.config(highlightbackground = 'ghost white')
-
-    def _deselect_all_but(self, entries, anchor=False):
-        if type(entries) != list:
-            entries = [entries]
-        print(self._selected_cells)
-        self._restore_borders(entries)
-        self._selected_cells = []
-        for cell in entries:
-            self._select_cell(cell)
-
-        if anchor:
-            self._anchor_cell = entries[0]
 
     def _deselect_cell(self, cell):
         self._selected_cells.remove(cell)
         cell.config(highlightbackground = 'ghost white')
 
-    def _select_cells(self, entry_widgets, flip=False):
-        for cell in entry_widgets:
-            self._select_cell(cell, flip)
+    def _select_cells(self, entry_widgets, exclusive=True, drag=False):
+        if exclusive:
+            self._restore_borders(entry_widgets)
+            self._selected_cells = []
+        
+        self._selected_motion_cells = []
 
-    def _select_cell(self, entry_widget, anchor = False, flip=False):
+        [self._select_cell(cell, exclusive=False, drag=drag) for cell in entry_widgets]
+
+    def _select_cell(self, entry_widget, anchor = False, exclusive=False, drag=False):
+        if exclusive:
+            self._restore_borders(entry_widget)
+            self._selected_cells = []
+
         entry_widget.config(highlightbackground = 'darkgreen')
-        if entry_widget in self._selected_cells:
-            if flip:
-                self._deselect_cell(entry_widget)
+
+        if drag:
+            self._selected_motion_cells.append(entry_widget)
         else:
             self._selected_cells.append(entry_widget)
         
@@ -60,7 +58,6 @@ class Spreadsheet(tk.Frame):
         entry_widget = self.nametowidget(event.widget)
 
         self._motion_anchor_cell = entry_widget
-        print(self._motion_anchor_cell)
 
         if not self.focus_get() == event.widget:
             if [entry_widget] == self._selected_cells:
@@ -73,7 +70,7 @@ class Spreadsheet(tk.Frame):
                     return 'break'
             else:
                 self.god_entry.focus_set()
-                self._deselect_all_but([entry_widget], anchor=True)
+                self._select_cell(entry_widget, anchor=True, exclusive=True, drag=False)
 
     def _on_spreadsheet_control_click(self, event):
         focus_widget = self.nametowidget(self.focus_get())
@@ -82,7 +79,7 @@ class Spreadsheet(tk.Frame):
         self._select_cell(entry_widget, anchor=True)
         if isinstance(focus_widget, tk.Entry):
             self.containing_frame.focus_set()
-            self._select_cell(focus_widget, flip=True)
+            self._select_cell(focus_widget)
 
     def _closed_range(self, a, b):
         start = None
@@ -103,7 +100,7 @@ class Spreadsheet(tk.Frame):
     def _on_spreadsheet_control_shift_click(self, event):
         self._select_range(self._anchor_cell, self.nametowidget(event.widget))
 
-    def _select_range(self, anchor_widget, reel_widget, exclusive = False):
+    def _select_range(self, anchor_widget, reel_widget, exclusive = False, drag=False, flip=False):
         anchor_coordinates = (ax, ay) = self._spreadsheet_entry_inverse[anchor_widget]
         reel_coordinates = (rx, ry) = self._spreadsheet_entry_inverse[reel_widget]
         
@@ -112,19 +109,13 @@ class Spreadsheet(tk.Frame):
         for x in self._closed_range(ax, rx):
             for y in self._closed_range(ay, ry):
                 cells.append(self._spreadsheet_entry[(x, y)])
+        self._select_cells(cells, exclusive=exclusive, drag=drag)
 
-        if exclusive:
-            self._deselect_all_but(cells)
-        else:
-            self._select_cells(cells)
-
-        print(self._selected_cells)
 
     def _on_spreadsheet_mouse_motion(self, event):
         motion_reel = self.winfo_containing(event.x_root, event.y_root)
         if motion_reel.config().get('state') != 'normal':
-            print(motion_reel)
-            self._select_range(self._motion_anchor_cell, motion_reel)
+            self._select_range(self._motion_anchor_cell, motion_reel, drag = True)
 
     def _on_spreadsheet_backspace(self, event):
         self.erase_selected_cell_contents()
@@ -133,11 +124,9 @@ class Spreadsheet(tk.Frame):
         self.erase_selected_cell_contents()
 
     def erase_selected_cell_contents(self):
-        print(self._selected_cells)
         for e in self._selected_cells:
-            print(e)
-            print(e.get())
-            e.delete(0, tk.END)
+            sv = self._spreadsheet_svs[self._spreadsheet_entry_inverse[e]]
+            sv.set('')
 
     def _on_spreadsheet_left(self, event):
         entry_widget = self.nametowidget(event.widget)
@@ -150,6 +139,8 @@ class Spreadsheet(tk.Frame):
         if entry_widget.selection_present():
             entry_widget.icursor(entry_widget.index(tk.ANCHOR) - 1)
 
+    def _on_spreadsheet_mouse_release(self, event):
+        self._selected_cells.extend(self._selected_motion_cells)
 
     def __init__(self, parent, rows, columns):
         tk.Frame.__init__(self, parent)
@@ -158,13 +149,18 @@ class Spreadsheet(tk.Frame):
 
         self._spreadsheet_entry = {}
         self._spreadsheet_entry_inverse = {}
+        self._spreadsheet_svs = {}
         self.spreadsheet_rows = rows
         self.spreadsheet_columns = columns
 
         self._selected_cells = []
         self._anchor_cell = None
 
+        self._column_labels = []
+
         self._motion_anchor_cell = None
+
+        self._selected_motion_cells = []
 
         # register a command to use for validation
         vcmd = (self.register(self._on_spreadsheet_cell_exit), '%W', '%P')
@@ -172,16 +168,32 @@ class Spreadsheet(tk.Frame):
         sv = tk.StringVar()
         sv.trace_add('write', lambda idc, idc2, idc3, sv=sv: self._on_entry_keystroke(sv))
         self.god_entry = tk.Entry(self, textvariable = sv)
-        self.god_entry.grid(row=0, column=0)
+        self.god_entry.grid(row=1, column=1)
         print(self.god_entry)
+
+        for column in range(self.spreadsheet_columns):
+            print(column)
+            l = tk.Label(self, text=utils.get_column_letters(column))
+            l.grid(row=0, column=column+1, sticky='ew')
+            l.config(cursor='sb_down_arrow')
+            self._column_labels.append(l)
+
+        for row in range(self.spreadsheet_rows):
+            l = tk.Label(self, text='  ' + str(row + 1) + '  ')
+            l.grid(row=row + 1, column=0)
+            l.config(cursor='sb_right_arrow')
+            self._column_labels.append(l)
 
         # create the table of widgets
         for row in range(self.spreadsheet_rows):
             for column in range(self.spreadsheet_columns):
                 index = (row, column)
-                e = tk.Entry(self, validate="focusout", validatecommand=vcmd)
-                e.grid(row=row, column=column, stick="nsew")
-                e.config(justify="left", state='disabled', cursor='plus', highlightthickness = 1, highlightbackground = 'ghost white')
+                sv = tk.StringVar()
+                e = tk.Entry(self, textvariable = sv, validate="focusout", validatecommand=vcmd)
+                self._spreadsheet_svs[index] = sv
+                e.grid(row=row+1, column=column+1, stick="nsew")
+                e.config(justify="left", state='disabled', cursor='plus', highlightthickness = 1, highlightbackground = 'ghost white',
+                            disabledbackground='white')
                 e.bind("<Button-1>", self._on_spreadsheet_click)
                 e.bind("<Control-Button-1>", self._on_spreadsheet_control_click)
                 e.bind("<Shift-Button-1>", self._on_spreadsheet_shift_click)
@@ -189,6 +201,7 @@ class Spreadsheet(tk.Frame):
                 e.bind("<Left>", self._on_spreadsheet_left)
                 e.bind('<Right>', self._on_spreadsheet_right)
                 e.bind("<B1-Motion>", self._on_spreadsheet_mouse_motion)
+                e.bind('<ButtonRelease-1>', self._on_spreadsheet_mouse_release)
                 self._spreadsheet_entry[index] = e
                 self._spreadsheet_entry_inverse[e] = index
 
@@ -204,11 +217,24 @@ class Spreadsheet(tk.Frame):
 
         self.god_entry.focus_set()
 
-    def _on_spreadsheet_up(self, event):
+    def _get_anchor_coords(self):
         anchor_widget = self.nametowidget(self._anchor_cell)
-        anchor_x, anchor_y = self._spreadsheet_entry_inverse[anchor_widget][1]
-        if anchor_y > 0:
-            self._deselect_all_but(self._spreadsheet_entry[(anchor_x, anchor_y - 1)], anchor=True)
+        return self._spreadsheet_entry_inverse[anchor_widget]
+
+    def _on_spreadsheet_up(self, event):
+        anchor_row, anchor_col = self._get_anchor_coords()
+        if anchor_row > 0:
+            print('here')
+            self._deselect_all_but(self._spreadsheet_entry[(anchor_row - 1, anchor_col)], anchor=True)
+
+    def _on_spreadsheet_down(self, event):
+        anchor_widget = self.nametowidget(self._anchor_cell)
+        anchor_row, anchor_col = self._spreadsheet_entry_inverse[anchor_widget]
+        if anchor_row > 0:
+            print('here')
+            self._deselect_all_but(self._spreadsheet_entry[(anchor_row - 1, anchor_col)], anchor=True)
+
+
 
 
     def get(self):
