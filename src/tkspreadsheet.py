@@ -287,9 +287,9 @@ class Spreadsheet(tk.Frame):
         # register a command to use for validation
         vcmd = (self.register(self._on_spreadsheet_cell_exit), '%W', '%P')
 
-        sv = tk.StringVar()
-        sv.trace_add('write', lambda idc, idc2, idc3, sv=sv: self._on_entry_keystroke(sv))
-        self.god_entry = tk.Entry(self, textvariable = sv)
+        self.sv = tk.StringVar()
+        self.sv.trace_add('write', lambda idc, idc2, idc3: self._update_all_selected_entries())
+        self.god_entry = tk.Entry(self, textvariable = self.sv)
         self.god_entry.grid(row=1, column=1)
         print(self.god_entry)
 
@@ -365,6 +365,14 @@ class Spreadsheet(tk.Frame):
             self.god_entry.focus_set()
 
         self._guarantee_focus = False
+
+    def _update_all_selected_entries(self):
+        print('hello')
+        for entry_widget in self._selected_cells:
+            sv = self._spreadsheet_svs[self._spreadsheet_entry_inverse[entry_widget]]
+            print(self.sv.get())
+            sv.set(self.sv.get())
+            entry_widget.update()
 
     def _on_spreadsheet_tab(self, event = None):
         self._next()

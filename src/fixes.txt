@@ -1,3 +1,5 @@
-shift click columns/rows
-set anchor for select mlutple
+shift/control click columns/rows
 Test out performance on large scale
+control-clicking flip not working
+shift/control arrows
+Enter/exit typing mode (single --> Multiple)
