@@ -1,0 +1,4 @@
+fix drag - undragged items then can't be control clicked
+shift click doesn't work with anchor gold
+shift click columns/rows
+set anchor for select mlutple
