@@ -56,26 +56,39 @@ class Spreadsheet(tk.Frame):
             self._selected_cells = []
 
         print(entry_widgets)
+
+        self._selected_motion_cells = []
         
         [self._select_cell(cell, exclusive=False, drag=drag) for cell in entry_widgets]
+
+    def _set_anchor(self, cell = None):
+        if not cell:
+            self._anchor_cell = None
+            self._restore_borders(None, method='selected')
+
+        if type(cell) == tuple:
+            cell = self.nametowidget(self._spreadsheet_entry[cell])
+
+        self._anchor_cell = cell
+        cell.config(highlightbackground = 'goldenrod')
+        self._restore_borders(self._anchor_cell, method='selected')
+
 
     def _select_cell(self, entry_widget, anchor = False, exclusive=False, drag=False, flip=False):
         if exclusive:
             self._restore_borders(entry_widget)
             self._selected_cells = []
 
+        if anchor:
+            self._set_anchor(entry_widget)
+        elif entry_widget != self._anchor_cell:
+            entry_widget.config(highlightbackground = 'darkgreen')
+
         if entry_widget in self._selected_cells:
             if flip:
                 self._deselect_cell(entry_widget)
             else:
                 return
-
-        if anchor:
-            self._anchor_cell = entry_widget
-            entry_widget.config(highlightbackground = 'goldenrod')
-            self._restore_borders(self._anchor_cell, method='selected')
-        else:
-            entry_widget.config(highlightbackground = 'darkgreen')
 
         if drag:
             self._selected_motion_cells.append(entry_widget)
@@ -179,6 +192,7 @@ class Spreadsheet(tk.Frame):
         motion_reel = self.winfo_containing(event.x_root, event.y_root)
         if motion_reel.config().get('state') != 'normal':
             self._select_range(self._motion_anchor_cell, motion_reel, drag=True)
+            print(self._selected_motion_cells)
 
     def _on_spreadsheet_backspace(self, event):
         self._erase_selected_cell_contents()
@@ -230,6 +244,7 @@ class Spreadsheet(tk.Frame):
 
     def _select_column(self, column, exclusive = True):
         self._select_cells([self._spreadsheet_entry[(row, column)] for row in range(self.spreadsheet_rows)], exclusive = exclusive)
+        self._set_anchor((0, column))
 
     def _select_cell_indices(self, indices):
         self._select_cells([self._spreadsheet_entry[index] for index in indices])
@@ -237,6 +252,8 @@ class Spreadsheet(tk.Frame):
     def _select_all(self, event):
         for column in range(self.spreadsheet_columns):
             self._select_column(column, exclusive = False)
+
+        self._set_anchor((0, 0))
 
 
     def __init__(self, program_paths, parent, rows, columns):
