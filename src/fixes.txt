@@ -4,6 +4,9 @@ Restore anchor when anchor is deselected - but restore to where??
 Set reel correctly when cell is deselected
 Some mutual recusion messing it all up
 Control clicking still flipping out
+Checko for shoft arrow when key is god
+Fix errors for arrow, control arrow, shift error when no ahcnor
+
 
 
 
@@ -11,4 +14,10 @@ Control clicking still flipping out
 
 Features:
 
-Export to CSV
+formulas
+
+
+
+WIth no anchor:
+Control-enter go to middle
+Control right 
