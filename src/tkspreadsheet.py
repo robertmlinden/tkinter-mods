@@ -4,6 +4,7 @@ import re
 from tkinter import messagebox
 
 import src.utils as utils
+import src.expr_evaluator as arithmetic_evaluator
 
 from PIL import Image, ImageTk
 
@@ -27,7 +28,14 @@ class Spreadsheet(tk.Frame):
 
         sv = self._spreadsheet_svs[self._spreadsheet_entry_inverse[entry_widget]]
 
-        sv.set(sv.get().strip())
+        value = sv.get().strip()
+
+        try:
+            value = str(arithmetic_evaluator.evaluate_expression(value))
+        except TypeError:
+            pass
+
+        sv.set(value)
 
         return True
 
@@ -39,6 +47,11 @@ class Spreadsheet(tk.Frame):
         for old in self._selected_cells:
             if old not in new:
                 old.config(highlightbackground = hlbg)
+
+    def _deselect_all(self, drag=False):
+        print('deselect all')
+        cells = self._selected_motion_cells if drag else self._selected_cells
+        self._deselect_cells(cells)
 
     def _deselect_cells(self, cells, drag=False):
         [self._deselect_cell(cell, drag=drag) for cell in cells]
@@ -145,6 +158,7 @@ class Spreadsheet(tk.Frame):
 
     def _on_spreadsheet_shift_click(self, event):
         self._select_range(self._anchor_cell, self.nametowidget(event.widget), exclusive = True)
+        print(self._reel_cell)
 
     def _on_spreadsheet_control_shift_click(self, event):
         self._select_range(self._anchor_cell, self.nametowidget(event.widget))
@@ -259,12 +273,23 @@ class Spreadsheet(tk.Frame):
     def _on_column_label_control_click(self, event):
         self._on_column_label_click(event, exclusive = False)
 
-    def _on_column_label_shift_click(self, event):
+    def _on_column_label_shift_click(self, event, exclusive=True):
         (_, anchor_col) = self._get_anchor_coords()
         event_col = self._column_labels.index(self.nametowidget(event.widget))
+        if exclusive:
+            self._deselect_all()
         for col in self._closed_range(anchor_col, event_col):
             self._select_column(col, exclusive = False, anchor=False)
         self._set_anchor(self._spreadsheet_entry[(0, anchor_col)])
+
+    def _on_row_label_shift_click(self, event, exclusive=True):
+        (anchor_row, _) = self._get_anchor_coords()
+        event_row = self._row_labels.index(self.nametowidget(event.widget))
+        if exclusive:
+            self._deselect_all()
+        for row in self._closed_range(anchor_row, event_row):
+            self._select_row(row, exclusive = False, anchor=False)
+        self._set_anchor(self._spreadsheet_entry[(anchor_row, 0)])
 
     def _select_column(self, column, exclusive = True, anchor = True):
         self._select_cells([self._spreadsheet_entry[(row, column)] for row in range(self.spreadsheet_rows)], exclusive = exclusive)
@@ -278,9 +303,10 @@ class Spreadsheet(tk.Frame):
     def _on_row_label_control_click(self, event):
         self._on_row_label_click(event, exclusive = False)
 
-    def _select_row(self, row, exclusive = True):
+    def _select_row(self, row, exclusive = True, anchor=True):
         self._select_cells([self._spreadsheet_entry[(row, column)] for column in range(self.spreadsheet_columns)], exclusive = exclusive)
-        self._set_anchor((row, 0))
+        if anchor:
+            self._set_anchor((row, 0))
 
     def _select_cell_indices(self, indices):
         self._select_cells([self._spreadsheet_entry[index] for index in indices])
@@ -349,6 +375,7 @@ class Spreadsheet(tk.Frame):
             l.bind('<Button-1>', self._on_column_label_click)
             l.bind('<Control-Button-1>', self._on_column_label_control_click)
             l.bind('<Shift-Button-1>', self._on_column_label_shift_click)
+            l.bind('<Control-Shift-Button-1>', lambda event: self._on_column_label_shift_click(event, exclusive=False))
             self._column_labels.append(l)
 
         for row in range(self.spreadsheet_rows):
@@ -357,6 +384,8 @@ class Spreadsheet(tk.Frame):
             l.config(cursor='sb_right_arrow')
             l.bind('<Button-1>', self._on_row_label_click)
             l.bind('<Control-Button-1>', self._on_row_label_control_click)
+            l.bind('<Shift-Button-1>', self._on_row_label_shift_click)
+            l.bind('<Control-Shift-Button-1>', lambda event: self._on_row_label_shift_click(event, exclusive=False))
             self._row_labels.append(l)
 
         # create the table of widgets
@@ -416,7 +445,7 @@ class Spreadsheet(tk.Frame):
         self.god_entry.bind('<Return>', self._on_spreadsheet_enter_key)
         self.god_entry.bind('<Control-Key-d>', self._on_spreadsheet_control_d)
         self.god_entry.bind('<Control-Key-a>', self._select_all)
-        self.god_entry.bind('<Control-Key-D>', self._calculate_determinant)
+        self.god_entry.bind('<Control-Key-D>', self._print_determinant)
         self.god_entry.bind('<Control-Key-I>', self._convert_to_inverse)
         self.god_entry.bind('<Control-Key-i>', self._print_inverse)
 
@@ -427,39 +456,106 @@ class Spreadsheet(tk.Frame):
     def _is_square_selection(self, event):
         pass
 
+    def _print_determinant(self, event):
+        message = None
+        try:
+            determinant = self._calculate_determinant(event)
+            message = ('Determinant Calculation', str(determinant))
+        except (TypeError, ValueError):
+            message = ('Try again', 'Not all entries are integers')
+        
+        messagebox.showinfo(*message)
+
     # Assume 3x3 from (0, 0)
     def _calculate_determinant(self, event):
-        a00 = self._spreadsheet_entry[(0, 0)].get().strip()
-        a01 = self._spreadsheet_entry[(0, 1)].get().strip()
-        a02 = self._spreadsheet_entry[(0, 2)].get().strip()
-        a10 = self._spreadsheet_entry[(1, 0)].get().strip()
-        a11 = self._spreadsheet_entry[(1, 1)].get().strip()
-        a12 = self._spreadsheet_entry[(1, 2)].get().strip()
-        a20 = self._spreadsheet_entry[(2, 0)].get().strip()
-        a21 = self._spreadsheet_entry[(2, 1)].get().strip()
-        a22 = self._spreadsheet_entry[(2, 2)].get().strip()
+        a00 = float(self._spreadsheet_entry[(0, 0)].get().strip())
+        a01 = float(self._spreadsheet_entry[(0, 1)].get().strip())
+        a02 = float(self._spreadsheet_entry[(0, 2)].get().strip())
+        a10 = float(self._spreadsheet_entry[(1, 0)].get().strip())
+        a11 = float(self._spreadsheet_entry[(1, 1)].get().strip())
+        a12 = float(self._spreadsheet_entry[(1, 2)].get().strip())
+        a20 = float(self._spreadsheet_entry[(2, 0)].get().strip())
+        a21 = float(self._spreadsheet_entry[(2, 1)].get().strip())
+        a22 = float(self._spreadsheet_entry[(2, 2)].get().strip())
         
-        try:
-            d1 = a11 * a22 - a21 * a12
-            print('1')
-            d2 = a10 * a22 - a20 * a22
-            print('2')
-            d3 = a10 * a21 - a20 * a11
-            print('3')
-            d = a00 * d1 - a01 * d2 + a02 * d3
-            print('d')
-            print(d)
-        except TypeError:
-            messagebox.showinfo('Try again', 'Not all entries are integers')
+        d1 = a11 * a22 - a21 * a12
+        d2 = a10 * a22 - a20 * a22
+        d3 = a10 * a21 - a20 * a11
+        d = a00 * d1 - a01 * d2 + a02 * d3
+
+        return d
+        
 
     def _convert_to_inverse(self, event):
-        pass
+        a00 = self._spreadsheet_entry[(0, 0)]
+        a01 = self._spreadsheet_entry[(0, 1)]
+        a02 = self._spreadsheet_entry[(0, 2)]
+        a10 = self._spreadsheet_entry[(1, 0)]
+        a11 = self._spreadsheet_entry[(1, 1)]
+        a12 = self._spreadsheet_entry[(1, 2)]
+        a20 = self._spreadsheet_entry[(2, 0)]
+        a21 = self._spreadsheet_entry[(2, 1)]
+        a22 = self._spreadsheet_entry[(2, 2)]
+
+        sv00 = self._spreadsheet_svs[self._spreadsheet_entry_inverse[a00]]
+        sv01 = self._spreadsheet_svs[self._spreadsheet_entry_inverse[a01]]
+        sv02 = self._spreadsheet_svs[self._spreadsheet_entry_inverse[a02]]
+        sv10 = self._spreadsheet_svs[self._spreadsheet_entry_inverse[a10]]
+        sv11 = self._spreadsheet_svs[self._spreadsheet_entry_inverse[a11]]
+        sv12 = self._spreadsheet_svs[self._spreadsheet_entry_inverse[a12]]
+        sv20 = self._spreadsheet_svs[self._spreadsheet_entry_inverse[a20]]
+        sv21 = self._spreadsheet_svs[self._spreadsheet_entry_inverse[a21]]
+        sv22 = self._spreadsheet_svs[self._spreadsheet_entry_inverse[a22]]
+
+        determinant = self._calculate_determinant(event)
+
+        result00 = float(a00.get()) / determinant
+        result01 = float(a01.get()) / determinant
+        result02 = float(a02.get()) / determinant
+        result10 = float(a10.get()) / determinant
+        result11 = float(a11.get()) / determinant
+        result12 = float(a12.get()) / determinant
+        result20 = float(a20.get()) / determinant
+        result21 = float(a21.get()) / determinant
+        result22 = float(a22.get()) / determinant
+
+        if int(result00) == result00: result00 = int(result00)
+        if int(result01) == result01: result01 = int(result01)
+        if int(result02) == result02: result02 = int(result02)
+        if int(result10) == result10: result10 = int(result10)
+        if int(result11) == result11: result11 = int(result11)
+        if int(result12) == result12: result12 = int(result12)
+        if int(result20) == result20: result20 = int(result20)
+        if int(result21) == result21: result21 = int(result21)
+        if int(result22) == result22: result22 = int(result22)
+
+        sv00.set(result00)
+        sv01.set(result01)
+        sv02.set(result02)
+        sv10.set(result10)
+        sv11.set(result11)
+        sv12.set(result12)
+        sv20.set(result20)
+        sv21.set(result21)
+        sv22.set(result22)
+
+        a00.update()
+        a01.update()
+        a02.update()
+        a10.update()
+        a11.update()
+        a12.update()
+        a20.update()
+        a21.update()
+        a22.update()
+
+
 
     def _print_inverse(self, event):
         pass
 
     def _on_spreadsheet_control_d(self, event):
-        self._update_all_selected_entries_typing()
+        self._update_all_selected_entries_typing(self._anchor_cell)
 
     def _on_spreadsheet_typing_escape(self, event):
         # TBD, keep old entry somewhere
@@ -536,7 +632,7 @@ class Spreadsheet(tk.Frame):
     def _on_spreadsheet_shift_dir(self, event=None):
         self._select_range(self._anchor_cell, self._reel_cell)
 
-    def _on_spreadsheet_shift_up(self, event=None):
+    def _on_spreadsheet_shift_up(self, event=None): # exclusive for control-shift
         reel_coords = reel_row, reel_col = self._get_reel_coords()
         offset = (0, 0)
         if reel_row > 0:
@@ -544,15 +640,28 @@ class Spreadsheet(tk.Frame):
         self._reel_cell = self._spreadsheet_entry[tuple(map(add, reel_coords, offset))]
         self._select_range(self._anchor_cell, self._reel_cell, exclusive=True)
 
+    def _on_spreadsheet_alt_up(self, event=None):
+        # This should move the anchor one up, nothing else should happen
+        pass
 
     def _on_spreadsheet_shift_down(self, event=None):
-        pass
+        reel_coords = reel_row, reel_col = self._get_reel_coords()
+        offset = (0, 0)
+        if reel_row < self.spreadsheet_rows - 1:
+            offset = (1, 0)
+        self._reel_cell = self._spreadsheet_entry[tuple(map(add, reel_coords, offset))]
+        self._select_range(self._anchor_cell, self._reel_cell, exclusive=True)
 
     def _on_spreadsheet_shift_left(self, event=None):
         pass
 
     def _on_spreadsheet_shift_right(self, event=None):
-        pass
+        reel_coords = reel_row, reel_col = self._get_reel_coords()
+        offset = (0, 0)
+        if reel_col < self.spreadsheet_columns - 1:
+            offset = (0, 1)
+        self._reel_cell = self._spreadsheet_entry[tuple(map(add, reel_coords, offset))]
+        self._select_range(self._anchor_cell, self._reel_cell, exclusive=True)
 
     def _on_spreadsheet_up(self, event = None, exclusive = True):
         anchor_row, anchor_col = self._get_anchor_coords()
