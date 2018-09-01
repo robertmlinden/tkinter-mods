@@ -3,3 +3,6 @@ Test out performance on large scale
 control-clicking flip not working
 shift/control arrows
 Enter/exit typing mode (single --> Multiple)
+Restore anchor when anchor is deselected
+Set reel correctly when cell is deselected
+Some mutual recusion messing it all up
