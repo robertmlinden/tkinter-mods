@@ -7,14 +7,17 @@ operators = {ast.Add: op.add, ast.Sub: op.sub, ast.Mult: op.mul,
              ast.USub: op.neg}
 
 def evaluate_expression(expr):
-    return eval_(ast.parse(expr, mode='eval').body)
+    try:
+        return _eval(ast.parse(expr, mode='eval').body)
+    except SyntaxError:
+        raise TypeError('fail')
 
 def _eval(node):
     if isinstance(node, ast.Num): # <number>
         return node.n
     elif isinstance(node, ast.BinOp): # <left> <operator> <right>
-        return operators[type(node.op)](eval_(node.left), eval_(node.right))
+        return operators[type(node.op)](_eval(node.left), _eval(node.right))
     elif isinstance(node, ast.UnaryOp): # <operator> <operand> e.g., -1
-        return operators[type(node.op)](eval_(node.operand))
+        return operators[type(node.op)](_eval(node.operand))
     else:
         raise TypeError(node)

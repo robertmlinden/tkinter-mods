@@ -1,7 +1,7 @@
 import tkinter as tk
 import re
 
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 
 import src.utils as utils
 import src.expr_evaluator as arithmetic_evaluator
@@ -12,11 +12,14 @@ from operator import add
 
 import os
 
+import csv
+
 class Spreadsheet(tk.Frame):
     def _on_entry_keystroke(self, sv):
         print(sv.get())
 
     def _on_spreadsheet_cell_exit(self, e, v):
+        print('leaving cell!')
         entry_widget = self.nametowidget(e)
         try:
             float(v)
@@ -31,11 +34,14 @@ class Spreadsheet(tk.Frame):
         value = sv.get().strip()
 
         try:
-            value = str(arithmetic_evaluator.evaluate_expression(value))
+            if value and value[0] == '=' and len(value) > 1:
+                value = str(arithmetic_evaluator.evaluate_expression(value[1:]))
         except TypeError:
             pass
 
         sv.set(value)
+
+        self._update_all_selected_entries_typing()
 
         return True
 
@@ -64,6 +70,7 @@ class Spreadsheet(tk.Frame):
             self._selected_motion_cells.remove(cell)
         else:
             self._selected_cells.remove(cell)
+            self._set_anchor(self._selected_cells[-1])
 
     def _select_cells(self, entry_widgets, exclusive=True, drag=False):
         if exclusive:
@@ -110,6 +117,26 @@ class Spreadsheet(tk.Frame):
             self._selected_cells.append(entry_widget)
         
         self.god_entry.focus_set()
+
+    def _export_to_csv(self, event=None):
+        values = self.get()
+
+        filename = filedialog.asksaveasfilename(title='Export to CSV', initialdir=self.program_paths['index'], filetypes=[('Comma Separated Values', '*.csv')])
+        
+        if not filename:
+            return
+
+        if filename[-4:].lower() != '.csv':
+            filename += '.csv'
+
+        with open(filename, "w+", newline='') as f:
+            writer = csv.writer(f, skipinitialspace=True)
+            writer.writerows(values) 
+
+        os.startfile(filename)
+
+
+
 
     def _entry_focus(self, entry_widget, highlight=True):
         entry_widget.config(state='normal', cursor='xterm')
@@ -448,6 +475,7 @@ class Spreadsheet(tk.Frame):
         self.god_entry.bind('<Control-Key-D>', self._print_determinant)
         self.god_entry.bind('<Control-Key-I>', self._convert_to_inverse)
         self.god_entry.bind('<Control-Key-i>', self._print_inverse)
+        self.god_entry.bind('<Control-Key-E>', self._export_to_csv)
 
         self._guarantee_focus = False
 
@@ -580,13 +608,14 @@ class Spreadsheet(tk.Frame):
         return self._entry_focus(self._anchor_cell, highlight=False)
 
     def _update_all_selected_entries_typing(self, entry = None):
+        print('Updating all entries!')
         if entry == self._anchor_cell:
+            print(self._get_anchor_sv().get())
             for entry_widget in self._selected_cells:
-                print(self._spreadsheet_entry_inverse[entry_widget])
                 if entry_widget == self._anchor_cell:
                     continue
                 sv = self._spreadsheet_svs[self._spreadsheet_entry_inverse[entry_widget]]
-                sv.set(self._anchor_cell.get())
+                sv.set(self._get_anchor_sv().get())
                 entry_widget.update()
 
     def _on_spreadsheet_tab(self, event = None):
