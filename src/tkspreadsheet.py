@@ -237,6 +237,8 @@ class Spreadsheet(tk.Frame):
 
     def _on_spreadsheet_mouse_motion(self, event):
         motion_reel = self.winfo_containing(event.x_root, event.y_root)
+        if motion_reel not in self._spreadsheet_entry.values():
+            return
         if motion_reel.config().get('state') != 'normal':
             self._select_range(self._motion_anchor_cell, motion_reel, drag=True)
 
@@ -274,7 +276,8 @@ class Spreadsheet(tk.Frame):
         self._min_motion_column = self.spreadsheet_rows
         self._max_motion_column = -1
 
-        self._reel_cell = self.nametowidget(event.widget)
+        self._reel_cell = self.winfo_containing(event.x_root, event.y_root)
+        print(self._reel_cell)
 
     def _on_spreadsheet_control_backspace(self, event):
         if self.focus_get() == event.widget:
