@@ -18,6 +18,6 @@ formulas
 
 
 
-WIth no anchor:
+With no anchor:
 Control-enter go to middle
 Control right 
