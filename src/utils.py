@@ -10,4 +10,4 @@ def get_column_letters(n, zero_indexed = True):
     return string
 
 def get_column_index(n, zero_indexed = True):
-    pass
+    return 0

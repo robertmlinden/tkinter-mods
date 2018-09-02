@@ -18,19 +18,20 @@ class Spreadsheet(tk.Frame):
     def _on_entry_keystroke(self, sv):
         print(sv.get())
 
-    def _get_cell_match(self, cell_index):
+    def _get_cell_value(self, cell_index):
         print(cell_index)
-        column_letter = re.match(r'[a-zA-Z]+', cell_index)[0]
+        column_letter = re.search(r'[a-zA-Z]+', cell_index)[0]
 
-        column = get_column_index(column_letter, zero_indexed=False)
-        row = re.match(r'[0-9]+', cell_index)[0]
+        column = utils.get_column_index(column_letter, zero_indexed=False)
+        row = int(re.search(r'[0-9]+', cell_index)[0]) - 1
 
         cell = self._spreadsheet_entry[(row, column)]
+        
+        value =  cell.get()
 
-        return cell.get()
+        return value
 
-    def _convert(value):
-        print('value passed in ' + value)
+    def _convert(self, value):
         return re.sub(r'\[.*?\]', lambda match: self._get_cell_value(match[0]), value)
 
     def _on_spreadsheet_cell_exit(self, e, v):
@@ -42,13 +43,11 @@ class Spreadsheet(tk.Frame):
 
         value = sv.get().strip()
 
-        print(value)
-
         try:
             if value and value[0] == '=' and len(value) > 1:
                 converted_value = self._convert(value[1:])
-                print('converted value ' + converted_value)
-                value = str(arithmetic_evaluator.evaluate_expression(value[1:]))
+                print(converted_value)
+                value = str(arithmetic_evaluator.evaluate_expression(converted_value))#value[1:]))
         except TypeError:
             pass
 
