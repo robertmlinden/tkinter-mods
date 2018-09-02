@@ -18,30 +18,49 @@ class Spreadsheet(tk.Frame):
     def _on_entry_keystroke(self, sv):
         print(sv.get())
 
+    def _get_cell_match(self, cell_index):
+        print(cell_index)
+        column_letter = re.match(r'[a-zA-Z]+', cell_index)[0]
+
+        column = get_column_index(column_letter, zero_indexed=False)
+        row = re.match(r'[0-9]+', cell_index)[0]
+
+        cell = self._spreadsheet_entry[(row, column)]
+
+        return cell.get()
+
+    def _convert(value):
+        print('value passed in ' + value)
+        return re.sub(r'\[.*?\]', lambda match: self._get_cell_value(match[0]), value)
+
     def _on_spreadsheet_cell_exit(self, e, v):
         print('leaving cell!')
+
         entry_widget = self.nametowidget(e)
+
+        sv = self._spreadsheet_svs[self._spreadsheet_entry_inverse[entry_widget]]
+
+        value = sv.get().strip()
+
+        print(value)
+
         try:
-            float(v)
+            if value and value[0] == '=' and len(value) > 1:
+                converted_value = self._convert(value[1:])
+                print('converted value ' + converted_value)
+                value = str(arithmetic_evaluator.evaluate_expression(value[1:]))
+        except TypeError:
+            pass
+
+        try:
+            float(value)
             entry_widget.config(justify='right')
         except ValueError:
             entry_widget.config(justify='left')
 
         entry_widget.config(state='disabled', cursor='plus')
 
-        sv = self._spreadsheet_svs[self._spreadsheet_entry_inverse[entry_widget]]
-
-        value = sv.get().strip()
-
-        try:
-            if value and value[0] == '=' and len(value) > 1:
-                value = str(arithmetic_evaluator.evaluate_expression(value[1:]))
-        except TypeError:
-            pass
-
         sv.set(value)
-
-        self._update_all_selected_entries_typing()
 
         return True
 
@@ -168,7 +187,6 @@ class Spreadsheet(tk.Frame):
         (self._max_motion_row, self._max_motion_column) = self._spreadsheet_entry_inverse[entry_widget]
 
         self._anchor_cell = entry_widget
-        self._selected_motion_cells.append(entry_widget)
 
         if not self.focus_get() == event.widget:
             if [entry_widget] == self._selected_cells:
@@ -455,7 +473,6 @@ class Spreadsheet(tk.Frame):
                 index = (row, column)
                 sv = tk.StringVar()
                 e = tk.Entry(self, textvariable = sv, validate="focusout", validatecommand=vcmd)
-                sv.trace('w', lambda idc1, idc2, idc3, e=e: self._update_all_selected_entries_typing(e))
                 self._spreadsheet_svs[index] = sv
                 e.grid(row=row+1, column=column+1, stick="nsew")
                 e.config(justify="left", state='disabled', cursor='plus', highlightthickness = 1, highlightbackground = 'ghost white',
@@ -476,6 +493,9 @@ class Spreadsheet(tk.Frame):
                 e.bind('<Up>', self._on_spreadsheet_up)
                 e.bind('<Escape>', self._on_spreadsheet_escape)
                 e.bind('<FocusOut>', self._on_entry_focus_out)
+                e.bind('<Control-Key-d>', self._on_spreadsheet_control_d)
+                e.bind('<Control-Key-E>', self._export_to_csv)
+
                 self._spreadsheet_entry[index] = e
                 self._spreadsheet_entry_inverse[e] = index
 

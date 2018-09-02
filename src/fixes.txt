@@ -6,8 +6,14 @@ Some mutual recusion messing it all up
 Control clicking still flipping out
 Checko for shoft arrow when key is god
 Fix errors for arrow, control arrow, shift error when no ahcnor
+When traversing a diagonal, the cells with highest row and highest col don't work! If diagonal, count diagonal!
+Fix shift clicks
 
 
+
+Refactors 
+
+Refactor restore cells
 
 
 
@@ -15,9 +21,16 @@ Fix errors for arrow, control arrow, shift error when no ahcnor
 Features:
 
 formulas
+allow square selection
+with no anchor:
+	Control-enter go to middle
+	Control right 
 
+Export to excel
+make borders nicer is.. meka borders internal disap highl bacg
+allow cell referencing
 
+create menus
+Allow drag across headers (use winfo)
 
-With no anchor:
-Control-enter go to middle
-Control right 
+non-greedy replacing

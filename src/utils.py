@@ -8,3 +8,6 @@ def get_column_letters(n, zero_indexed = True):
         n, remainder = divmod(n - 1, 26)
         string = chr(65 + remainder) + string
     return string
+
+def get_column_index(n, zero_indexed = True):
+    pass
