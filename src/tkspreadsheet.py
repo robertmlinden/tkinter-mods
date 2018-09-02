@@ -19,12 +19,19 @@ class Cell(tk.Entry):
         tk.Entry.__init__(self, *args, **kw)
         self.sv = kw['textvariable']
 
+    @property
+    def display_value(self):
+        "I am the 'x' property."
+        return self.sv.get()
+    @display_value.setter
+    def display_value(self, value):
+        self.sv.set(value)
+
 class Spreadsheet(tk.Frame):
     def _on_entry_keystroke(self, sv):
         print(sv.get())
 
     def _get_cell_value(self, cell_index):
-        print(cell_index)
         column_letter = re.search(r'[a-zA-Z]+', cell_index)[0]
 
         column = utils.get_column_index(column_letter, zero_indexed=False)
@@ -39,32 +46,29 @@ class Spreadsheet(tk.Frame):
     def _convert(self, value):
         return re.sub(r'\[.*?\]', lambda match: self._get_cell_value(match[0]), value)
 
-    def _on_spreadsheet_cell_exit(self, e, v):
+    def _on_spreadsheet_cell_exit(self, c, v):
         print('leaving cell!')
 
-        entry_widget = self.nametowidget(e)
+        cell = self.nametowidget(c)
 
-        sv = self._cells[self._cells_inverse[entry_widget]].sv
-
-        value = sv.get().strip()
+        value = cell.display_value.strip()
 
         try:
             if value and value[0] == '=' and len(value) > 1:
                 converted_value = self._convert(value[1:])
-                print(converted_value)
                 value = str(arithmetic_evaluator.evaluate_expression(converted_value))#value[1:]))
         except TypeError:
             pass
 
         try:
             float(value)
-            entry_widget.config(justify='right')
+            cell.config(justify='right')
         except ValueError:
-            entry_widget.config(justify='left')
+            cell.config(justify='left')
 
-        entry_widget.config(state='disabled', cursor='plus')
+        cell.config(state='disabled', cursor='plus')
 
-        sv.set(value)
+        cell.display_value = value
 
         return True
 
@@ -323,8 +327,7 @@ class Spreadsheet(tk.Frame):
             self._erase_cell_contents(e)
 
     def _erase_cell_contents(self, entry_widget):
-        sv = self._cells[self._cells_inverse[entry_widget]].sv
-        sv.set('')
+        entry_widget.display_value = ''
 
     def _on_spreadsheet_typing_left(self, event):
         entry_widget = self.nametowidget(event.widget)
@@ -651,7 +654,7 @@ class Spreadsheet(tk.Frame):
         pass
 
     def _on_spreadsheet_control_d(self, event):
-        self._update_all_selected_entries_typing(self._anchor_cell)
+        self._copy_from_anchor_to_selected(self._anchor_cell)
 
     def _on_spreadsheet_typing_escape(self, event):
         # TBD, keep old entry somewhere
@@ -673,19 +676,17 @@ class Spreadsheet(tk.Frame):
         return self._cells[self._cells_inverse[self._anchor_cell]].sv
 
     def _go_to_entry_widget(self):
-        asv = self._get_anchor_sv()
-        asv.set(self.gsv.get())
+        self._anchor_cell.display_value = self.gsv.get()
         self.gsv.set('')
         return self._entry_focus(self._anchor_cell, highlight=False)
 
-    def _update_all_selected_entries_typing(self, entry = None):
+    def _copy_from_anchor_to_selected(self, entry = None):
         print('Updating all entries!')
         if entry == self._anchor_cell:
             for entry_widget in self._selected_cells:
                 if entry_widget == self._anchor_cell:
                     continue
-                sv = self._cells[self._cells_inverse[entry_widget]].sv
-                sv.set(self._get_anchor_sv().get())
+                entry_widget.display_value = self._anchor_cell.display_value
                 entry_widget.update()
 
     def _on_spreadsheet_tab(self, event = None):
