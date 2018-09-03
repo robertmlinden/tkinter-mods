@@ -20,3 +20,10 @@ def get_column_index(s, go = False):
             return 0
 
         return letter_to_index(s[-1]) + 26*get_column_index(s[:-1], go=True)
+
+def get_cell_index(*args):
+    if type(args[0]) == tuple:
+        get_cell_index(*args[0])
+    row, column = args[0], args[1]
+    return get_column_letters(column, zero_indexed = True) + str(row + 1)
+    
