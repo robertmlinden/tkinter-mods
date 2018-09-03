@@ -99,7 +99,7 @@ class Spreadsheet(tk.Frame):
         self._deselect_cells(self._solidified_cells)
 
     def _deselect_cells(self, cells):
-        [self._deselect_cell(cell) for cell in cells]
+        [self._deselect_cell(cells[0]) for i in range(len(cells))]
 
     def _deselect_cell(self, cell):
         print('deselect cell : ' + str(cell))
@@ -183,8 +183,6 @@ class Spreadsheet(tk.Frame):
             writer.writerows(values) 
 
         os.startfile(filename)
-
-
 
 
     def _entry_focus(self, entry_widget, highlight=True):
