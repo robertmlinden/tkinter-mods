@@ -115,7 +115,13 @@ class Spreadsheet(tk.Frame):
         except ValueError:
             pass
 
-    def _select_cells(self, entry_widgets, exclusive=True, solidify=True):
+    def _select_all(self, event):
+        for column in range(self.spreadsheet_columns):
+            self._select_column(column, exclusive = False, solidify=False)
+
+        self._set_anchor((0, 0))
+
+    def _select_cells(self, entry_widgets, exclusive=True, solidify=False):
         if exclusive:
             self._restore_borders(entry_widgets)
             self._solidified_cells = []
@@ -123,10 +129,14 @@ class Spreadsheet(tk.Frame):
         [self._select_cell(cell, exclusive=False, solidify=solidify) for cell in entry_widgets]
 
     def _select_cell(self, entry_widget, anchor=False, exclusive=False, solidify=False, flip=False):
+        print(('Soft 'if not solidify else '') + 'Selecting cell ' + str(entry_widget))
+
+        cells = self._solidified_cells if solidify else self._selected_cells
+
         if exclusive:
             self._deselect_all(solidify=True)
 
-        if entry_widget in self._solidified_cells:
+        if entry_widget in cells:
             if flip:
                 print('flip')
                 self._deselect_cell(entry_widget)
@@ -137,11 +147,8 @@ class Spreadsheet(tk.Frame):
         else:
             entry_widget.config(highlightbackground = 'darkgreen')
 
-        if solidify:
-            self._selected_cells.append(entry_widget)
-        else:
-            self._solidified_cells.append(entry_widget)
-        
+        cells.append(entry_widget)
+
         self.god_entry.focus_set()
 
 
@@ -202,7 +209,7 @@ class Spreadsheet(tk.Frame):
             if [entry_widget] == self._solidified_cells:
                 return self._entry_focus(entry_widget)
             else:
-                self._select_cell(entry_widget, anchor=True, exclusive=True, solidify=True)
+                self._select_cell(entry_widget, anchor=True, exclusive=True, solidify=False)
                 self.god_entry.focus_set()
 
     def _on_spreadsheet_control_click(self, event):
@@ -225,10 +232,13 @@ class Spreadsheet(tk.Frame):
 
     def _on_spreadsheet_shift_click(self, event):
         self._reel_cell = self.nametowidget(event.widget)
+        print(self._selected_cells)
         self._deselect_all(solidify=True)
+        print(self._selected_cells)
         self._select_range(exclusive = True)
 
     def _on_spreadsheet_control_shift_click(self, event):
+        print(event.widget)
         self._reel_cell = self.nametowidget(event.widget)
         self._select_range()
 
@@ -399,12 +409,6 @@ class Spreadsheet(tk.Frame):
 
     def _select_cell_indices(self, indices):
         self._select_cells([self._cells[index] for index in indices])
-
-    def _select_all(self, event):
-        for column in range(self.spreadsheet_columns):
-            self._select_column(column, exclusive = False)
-
-        self._set_anchor((0, 0))
 
 
     def __init__(self, program_paths, parent, rows, columns):
