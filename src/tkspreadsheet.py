@@ -202,8 +202,8 @@ class Spreadsheet(tk.Frame):
             if [entry_widget] == self._solidified_cells:
                 return self._entry_focus(entry_widget)
             else:
-                self.god_entry.focus_set()
                 self._select_cell(entry_widget, anchor=True, exclusive=True, solidify=True)
+                self.god_entry.focus_set()
 
     def _on_spreadsheet_control_click(self, event):
         focus_widget = self.nametowidget(self.focus_get())
@@ -223,12 +223,9 @@ class Spreadsheet(tk.Frame):
 
         return range(start, stop + 1)
 
-    def _clear_solidified_cells(self):
-        self._deselect_all()
-
     def _on_spreadsheet_shift_click(self, event):
         self._reel_cell = self.nametowidget(event.widget)
-        self._clear_solidified_cells()
+        self._deselect_all(solidify=True)
         self._select_range(exclusive = True)
 
     def _on_spreadsheet_control_shift_click(self, event):
@@ -254,12 +251,12 @@ class Spreadsheet(tk.Frame):
         if _min_motion_row > self._min_motion_row:
             print('The row minimum increased')
             for row in range(self._min_motion_row, _min_motion_row):
-                self._deselect_cells([self._cells[(row, column)] for column in column_range], solidify=True)
+                self._deselect_cells([self._cells[(row, column)] for column in column_range], solidify=False)
 
         elif _max_motion_row < self._max_motion_row:
             print('The row maximum decreased')
             for row in range(self._max_motion_row, _max_motion_row, -1):
-                self._deselect_cells([self._cells[(row, column)] for column in column_range], solidify=True)
+                self._deselect_cells([self._cells[(row, column)] for column in column_range], solidify=False)
 
         if _min_motion_row < self._min_motion_row:
             print('The row minimum decreased')
@@ -277,12 +274,12 @@ class Spreadsheet(tk.Frame):
         if _min_motion_column > self._min_motion_column:
             print('The column minimum increased')
             for column in range(self._min_motion_column, _min_motion_column):
-                self._deselect_cells([self._cells[(row, column)] for row in row_range], solidify=True)
+                self._deselect_cells([self._cells[(row, column)] for row in row_range], solidify=False)
 
         elif _max_motion_column < self._max_motion_column:
             print('The column maximum decreased')
             for column in range(self._max_motion_column, _max_motion_column, -1):
-                self._deselect_cells([self._cells[(row, column)] for row in row_range], solidify=True)
+                self._deselect_cells([self._cells[(row, column)] for row in row_range], solidify=False)
 
 
         if _min_motion_column < self._min_motion_column:
