@@ -93,26 +93,24 @@ class Spreadsheet(tk.Frame):
             if old not in new:
                 old.config(highlightbackground = hlbg)
 
-    def _deselect_all(self):
+    def _deselect_all(self, solidify=False):
         print('deselect all')
 
-        self._deselect_cells(self._solidified_cells)
+        cells = self._solidified_cells if solidify else self._selected_cells
 
-    def _deselect_cells(self, cells):
-        [self._deselect_cell(cells[0]) for i in range(len(cells))]
+        self._deselect_cells(cells, solidify=solidify)
 
-    def _deselect_cell(self, cell):
+    def _deselect_cells(self, cells, solidify=False):
+        [self._deselect_cell(cells[0], solidify=solidify) for i in range(len(cells))]
+
+    def _deselect_cell(self, cell, solidify=False):
         print('deselect cell : ' + str(cell))
-        if not cell:
-            return
-        #hlbg = 'darkgreen' if cell in self._solidified_cells else 'ghost white'
-        hlbg = 'ghost white'
-        cell.config(highlightbackground = hlbg)
         try:
-            self._solidified_cells.remove(cell)
+            cells = self._solidified_cells if solidify else self._selected_cells
+            cells.remove(cell)
+            cell.config(highlightbackground = 'ghost white')
             if cell == self._anchor_cell:
-                print(self._solidified_cells)
-                anchor = self._solidified_cells[-1] if self._solidified_cells else None
+                anchor = self._selected_cells[-1] if self._selected_cells else self._solidified_cells[-1] if self._solidified_cells else None
                 self._set_anchor(anchor)
         except ValueError:
             pass
@@ -124,10 +122,33 @@ class Spreadsheet(tk.Frame):
         
         [self._select_cell(cell, exclusive=False, solidify=solidify) for cell in entry_widgets]
 
+    def _select_cell(self, entry_widget, anchor=False, exclusive=False, solidify=False, flip=False):
+        if exclusive:
+            self._deselect_all(solidify=True)
+
+        if entry_widget in self._solidified_cells:
+            if flip:
+                print('flip')
+                self._deselect_cell(entry_widget)
+            else:
+                return
+        elif anchor:
+            self._set_anchor(entry_widget)
+        else:
+            entry_widget.config(highlightbackground = 'darkgreen')
+
+        if solidify:
+            self._selected_cells.append(entry_widget)
+        else:
+            self._solidified_cells.append(entry_widget)
+        
+        self.god_entry.focus_set()
+
+
     def _set_anchor(self, cell = None):
         if not cell:
             self._anchor_cell = None
-            self._restore_borders(None, method='selected')
+            #self._restore_borders(None, method='selected')
             return
 
         if type(cell) == tuple:
@@ -139,33 +160,6 @@ class Spreadsheet(tk.Frame):
 
     def _solidify(self):
         self._solidified_cells.extend(self._selected_cells)
-
-    def _select_cell(self, entry_widget, anchor=False, exclusive=False, solidify=False, flip=False):
-        print(entry_widget)
-        if exclusive:
-            self._solidify()
-            print(self._solidified_cells)
-            self._deselect_all()
-            print(self._solidified_cells)
-
-        if anchor:
-            self._set_anchor(entry_widget)
-        elif entry_widget != self._anchor_cell:
-            entry_widget.config(highlightbackground = 'darkgreen')
-
-        if entry_widget in self._solidified_cells:
-            if flip:
-                print('flip')
-                self._deselect_cell(entry_widget)
-            else:
-                return
-
-        if solidify:
-            self._selected_cells.append(entry_widget)
-        else:
-            self._solidified_cells.append(entry_widget)
-        
-        self.god_entry.focus_set()
 
     def _export_to_csv(self, event=None):
         values = self.get()
@@ -203,8 +197,6 @@ class Spreadsheet(tk.Frame):
 
         (self._min_motion_row, self._min_motion_column) = \
         (self._max_motion_row, self._max_motion_column) = self._cells_inverse[entry_widget]
-
-        self._anchor_cell = entry_widget
 
         if not self.focus_get() == event.widget:
             if [entry_widget] == self._solidified_cells:
@@ -262,12 +254,12 @@ class Spreadsheet(tk.Frame):
         if _min_motion_row > self._min_motion_row:
             print('The row minimum increased')
             for row in range(self._min_motion_row, _min_motion_row):
-                self._deselect_cells([self._cells[(row, column)] for column in column_range])
+                self._deselect_cells([self._cells[(row, column)] for column in column_range], solidify=True)
 
         elif _max_motion_row < self._max_motion_row:
             print('The row maximum decreased')
             for row in range(self._max_motion_row, _max_motion_row, -1):
-                self._deselect_cells([self._cells[(row, column)] for column in column_range])
+                self._deselect_cells([self._cells[(row, column)] for column in column_range], solidify=True)
 
         if _min_motion_row < self._min_motion_row:
             print('The row minimum decreased')
@@ -285,12 +277,12 @@ class Spreadsheet(tk.Frame):
         if _min_motion_column > self._min_motion_column:
             print('The column minimum increased')
             for column in range(self._min_motion_column, _min_motion_column):
-                self._deselect_cells([self._cells[(row, column)] for row in row_range])
+                self._deselect_cells([self._cells[(row, column)] for row in row_range], solidify=True)
 
         elif _max_motion_column < self._max_motion_column:
             print('The column maximum decreased')
             for column in range(self._max_motion_column, _max_motion_column, -1):
-                self._deselect_cells([self._cells[(row, column)] for row in row_range])
+                self._deselect_cells([self._cells[(row, column)] for row in row_range], solidify=True)
 
 
         if _min_motion_column < self._min_motion_column:
