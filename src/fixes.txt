@@ -8,6 +8,7 @@ Checko for shoft arrow when key is god
 Fix errors for arrow, control arrow, shift error when no ahcnor
 When traversing a diagonal, the cells with highest row and highest col don't work! If diagonal, count diagonal!
 Fix shift clicks
+Fix cell still in focus error for failed formulas
 
 
 
