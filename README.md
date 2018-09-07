@@ -1,8 +1,8 @@
 # tkinter-mods
 ## Spreadsheets Project
 
-The goal of this WIP is to experiment with creating a programmer-friendly spreadsheet tool using Tkinter widgets. Tools like Excel, OpenOffice, etc. are quite useful to the average non-technical person, but for those of us who not only want but _need_ macros, the aformentioned tools are weak.
+The goal of this WIP is to experiment with creating a programmer-friendly spreadsheet tool build from lightweight Tkinter widgets. Well-known spreadsheet tools like Excel, OpenOffice, etc. are quite useful to the average non-technical person, but for those of us who rely on macros and complicated scripting to save time and achieve our goals, these tools become less helpful.
 
-The goal is to simplify the process of creating macros for the user by making the indiginous language Python and providing a simple API library for such. Cell formulas will be Pythonic as an added bonus.
+The goal is to simplify macros by making Python the indigenous language (rather than VBA).
 
-At best, I hope to take the best of every spreadsheet tool and add even more.
+At best, I hope to mimic the most useful features of the current existing tools; plus what I have outlined above.
