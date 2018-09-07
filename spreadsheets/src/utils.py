@@ -1,3 +1,5 @@
+import re
+
 def get_column_letters(n, zero_indexed = True):
     if zero_indexed: 
         n += 1
@@ -26,4 +28,10 @@ def get_cell_index(*args):
         get_cell_index(*args[0])
     row, column = args[0], args[1]
     return get_column_letters(column, zero_indexed = True) + str(row + 1)
+
+def get_cell_coordinates(cell_index):
+    column_letter = re.search(r'[a-zA-Z]+', cell_index)[0]
+
+    column = utils.get_column_index(column_letter)
+    row = int(re.search(r'[0-9]+', cell_index)[0]) - 1
     
