@@ -36,4 +36,34 @@ def get_cell_coordinates(cell_index):
     row = int(re.search(r'[0-9]+', cell_index)[0]) - 1
 
     return (row, column)
+
+def closed_range(a, b):
+    start = None
+    stop = None
     
+    if a < b:
+        start = a
+        stop = b
+    else:
+        start = b
+        stop = a
+
+    return range(start, stop + 1)
+
+def normalize_cell_notation(cell, col=None):
+    if type(cell) == int:
+        if cell == -1:
+            cell = self.spreadsheet_rows - 1
+        if col == -1:
+            cell = self.spreadsheet_columns - 1
+        cell = self._cells[(cell, col)]
+    elif type(cell) == tuple:
+        if cell[0] == -1:
+            cell = (self.spreadsheet_rows - 1, cell[1])
+        if cell[1] == -1:
+            cell = (cell[0], self.spreadsheet_columns - 1)
+        cell = self._cells[cell]
+    elif type(cell) == str:
+        cell = self._cells[get_cell_coordinates(cell)]
+
+    return cell
