@@ -32,6 +32,8 @@ def get_cell_index(*args):
 def get_cell_coordinates(cell_index):
     column_letter = re.search(r'[a-zA-Z]+', cell_index)[0]
 
-    column = utils.get_column_index(column_letter)
+    column = get_column_index(column_letter)
     row = int(re.search(r'[0-9]+', cell_index)[0]) - 1
+
+    return (row, column)
     

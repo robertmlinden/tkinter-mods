@@ -116,7 +116,7 @@ class Spreadsheet(tk.Frame):
 
     def _select_all(self, event):
         print('Selecting all cells in the grid!')
-        self._select_range(exclusive=True, anchor='A1')
+        self._select_range(exclusive=True, anchor='A1', reel=(-1, -1))
 
     def _select_cells(self, entry_widgets, exclusive=False):
         print('Selecting cells ' + str([cell.cell_index for cell in entry_widgets]))
@@ -137,6 +137,8 @@ class Spreadsheet(tk.Frame):
                 print('flip')
                 self._deselect_cell(entry_widget)
             else:
+                if anchor:
+                    self._set_anchor(entry_widget)
                 return
         elif anchor:
             self._set_anchor(entry_widget)
@@ -158,8 +160,16 @@ class Spreadsheet(tk.Frame):
 
     def _normalize_cell_notation(self, cell, col=None):
         if type(cell) == int:
+            if cell == -1:
+                cell = self.spreadsheet_rows - 1
+            if col == -1:
+                cell = self.spreadsheet_columns - 1
             cell = self._cells[(cell, col)]
         elif type(cell) == tuple:
+            if cell[0] == -1:
+                cell = (self.spreadsheet_rows - 1, cell[1])
+            if cell[1] == -1:
+                cell = (cell[0], self.spreadsheet_columns - 1)
             cell = self._cells[cell]
         elif type(cell) == str:
             cell = self._cells[utils.get_cell_coordinates(cell)]
@@ -396,20 +406,17 @@ class Spreadsheet(tk.Frame):
         event_col = self._column_labels.index(self.nametowidget(event.widget))
         self._select_range(anchor=(0, anchor_col), reel=(self.spreadsheet_rows - 1, event_col), keepanchor = True, exclusive = exclusive)
 
-    def _select_column(self, column, exclusive = True, anchor = True):
+    def _select_column(self, column, exclusive = True):
         print('Selecting column ' + str(column))
-        anchor_coords = (0, column) if anchor else None
-        reel_coords = (self.spreadsheet_rows - 1, column)
-        self._select_range(anchor = anchor_coords, keepanchor = False, reel = reel_coords, exclusive = exclusive)
+        self._select_range(anchor = (0, column), keepanchor = False, reel = (self.spreadsheet_rows - 1, column), exclusive = exclusive)
 
     def _select_columns(self, rng):
         for col in rng:
             self._select_column(col)
 
     def _on_column_label_mouse_motion(self, event):
-        pass
-        #column_label = self.winfo_containing(event.x_root, self._column_y)
-        #self._select_columns(self._closed_range(self._column_anchor, ))
+        reel_col = self._column_labels.index(self.winfo_containing(event.x_root, self._column_y))
+        self._select_range(exclusive=False, keepanchor=True, reel=(-1, reel_col))
 
     def _on_row_label_click(self, event, exclusive = True):
         row = self._row_labels.index(self.nametowidget(event.widget))
