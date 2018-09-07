@@ -33,416 +33,6 @@ class Cell(tk.Entry):
         return self.cell_index
 
 class Spreadsheet(tk.Frame):
-    def _on_entry_keystroke(self, sv):
-        print(sv.get())
-
-    def _get_cell_value(self, cell_index, stringify):
-        (row, column) = utils.get_cell_coordinates(cell_index)
-
-        cell = self._cells[(row, column)]
-
-        value =  cell.get()
-
-        if stringify:
-            value = "'" + value + "'"
-
-        return value
-
-    def _cell_convert(self, value, stringify=False):
-        return re.sub(r'\[.*?\]', lambda match: self._get_cell_value(match[0], stringify), value)
-
-    def _process_formula(self, formula, number_based = True):
-        if formula and formula[0] == '=' and len(formula) > 1:
-            converted_value = self._cell_convert(formula[1:], not number_based)
-            if number_based:
-                return str(arithmetic_evaluator.evaluate_expression(converted_value))#value[1:]))
-            else:
-                return eval(converted_value)
-        else:
-            return formula
-
-    def _on_spreadsheet_cell_exit(self, c, v):
-        print('leaving cell!')
-
-        cell = self.nametowidget(c)
-
-        value = cell.display_value.strip()
-
-        try:
-            value = self._process_formula(value)
-        except TypeError:
-            value = self._process_formula(value, number_based = False)
-        try:
-            float(value)
-            cell.config(justify='right')
-        except ValueError:
-            cell.config(justify='left')
-
-        cell.config(state='disabled', cursor='plus')
-
-        cell.display_value = value
-
-        return True
-
-    def _restore_borders(self, new, method='normal'):
-        print('restore borders')
-        hlbg = 'darkgreen' if method == 'selected' else 'ghost white'
-
-        if type(new) != list:
-            new = [new]
-        for old in self._selected_cells:
-            if old not in new:
-                old.config(highlightbackground = hlbg)
-
-    def _deselect_all(self, but=[]):
-        print('deselect all')
-
-        self._deselect_cells([cell for cell in self._selected_cells if cell not in but])
-
-    def _deselect_cells(self, cells):
-        print('Deselecting cells ' + repr(cells))
-        [self._deselect_cell(cell) for cell in cells]
-
-    def _deselect_cell(self, cell):
-        #print('deselect cell : ' + str(cell))
-        try:
-            self._selected_cells.remove(cell)
-            cell.config(highlightbackground = 'ghost white')
-            if cell == self._anchor_cell:
-                anchor = self._selected_cells[-1] if self._selected_cells else None
-                self._set_anchor(anchor)
-        except ValueError:
-            pass
-
-    def _select_all(self, event):
-        print('Selecting all cells in the grid!')
-        self._select_range(exclusive=True, anchor='A1', reel=(-1, -1))
-
-    def _select_cells(self, entry_widgets, exclusive=False):
-        print('Selecting cells ' + str([cell.cell_index for cell in entry_widgets]))
-        if exclusive:
-            self._restore_borders(entry_widgets)
-            self._selected_cells = []
-        
-        [self._select_cell(cell, exclusive=False) for cell in entry_widgets]
-
-    def _select_cell(self, entry_widget, anchor=False, exclusive=False, flip=False):
-        print('Selecting cell ' + repr(entry_widget))
-
-        if exclusive:
-            self._deselect_all()          
-
-        if entry_widget in self._selected_cells:
-            if flip:
-                print('flip')
-                self._deselect_cell(entry_widget)
-            else:
-                if anchor:
-                    self._set_anchor(entry_widget)
-                return
-        elif anchor:
-            self._set_anchor(entry_widget)
-        else:
-            entry_widget.config(highlightbackground = 'darkgreen')
-
-        self._selected_cells.append(entry_widget)
-
-        self.god_entry.focus_set()
-
-        print('self._selected_cells now is ' + str(self._selected_cells))
-
-    def _set_reel(self, cell, col=None):
-        cell = self._normalize_cell_notation(cell)
-
-        self._reel_cell, self._prev_reel_cell = cell, self._reel_cell
-
-        print('Reel cell is now ' + repr(self._reel_cell))
-
-    def _normalize_cell_notation(self, cell, col=None):
-        if type(cell) == int:
-            if cell == -1:
-                cell = self.spreadsheet_rows - 1
-            if col == -1:
-                cell = self.spreadsheet_columns - 1
-            cell = self._cells[(cell, col)]
-        elif type(cell) == tuple:
-            if cell[0] == -1:
-                cell = (self.spreadsheet_rows - 1, cell[1])
-            if cell[1] == -1:
-                cell = (cell[0], self.spreadsheet_columns - 1)
-            cell = self._cells[cell]
-        elif type(cell) == str:
-            cell = self._cells[utils.get_cell_coordinates(cell)]
-
-        return cell
-
-    def _set_anchor(self, cell, col = None, add = False):        
-        if not cell and cell != 0:
-            self._anchor_cell = None
-            return
-
-        cell = self._normalize_cell_notation(cell)
-
-        print('Setting cell ' + repr(cell) + ' to anchor')
-
-        self._anchor_cell = cell
-        cell.config(highlightbackground = 'goldenrod')
-        self._restore_borders(self._anchor_cell, method='selected')
-
-        self._set_reel(cell)
-
-        if add and cell not in self._selected_cells:
-            self._selected_cells.append(cell)
-
-    def _export_to_csv(self, event=None):
-        values = self.get()
-
-        filename = filedialog.asksaveasfilename(title='Export to CSV', initialdir=self.program_paths['index'], filetypes=[('Comma Separated Values', '*.csv')])
-        
-        if not filename:
-            return
-
-        if filename[-4:].lower() != '.csv':
-            filename += '.csv'
-
-        with open(filename, "w+", newline='') as f:
-            writer = csv.writer(f, skipinitialspace=True)
-            writer.writerows(values) 
-
-        os.startfile(filename)
-
-
-    def _entry_focus(self, entry_widget, highlight=True):
-        print('Focus on entry: ' + str(entry_widget))
-        if not entry_widget:
-            return
-
-        entry_widget.config(state='normal', cursor='xterm')
-        entry_widget.focus_set()
-        if highlight:
-            entry_widget.selection_range(0, 'end')
-        entry_widget.icursor(tk.END)
-
-        if entry_widget.get():
-            return 'break'
-
-    def _on_spreadsheet_click(self, event):
-        print(event.type + ': <Button-1>')
-        entry_widget = self.nametowidget(event.widget)
-
-        if not self.focus_get() == event.widget:
-            if [entry_widget] == self._selected_cells:
-                return self._entry_focus(entry_widget)
-            else:
-                self._select_cell(entry_widget, anchor=True, exclusive=True)
-                self.god_entry.focus_set()
-
-    def _on_spreadsheet_control_click(self, event):
-        print(event.type + ': <Control-Button-1>')
-        entry_widget = self.nametowidget(event.widget)
-        self._select_cell(entry_widget, anchor=True, flip=True)
-
-    def _closed_range(self, a, b):
-        start = None
-        stop = None
-        
-        if a < b:
-            start = a
-            stop = b
-        else:
-            start = b
-            stop = a
-
-        return range(start, stop + 1)
-
-    def _on_spreadsheet_shift_click(self, event):
-        print(event.type + ': <Shift-Button-1>')
-        self._deselect_all(but=[self._anchor_cell])
-        self._select_range(reel = self.nametowidget(event.widget), exclusive = True)
-
-    def _on_spreadsheet_control_shift_click(self, event):
-        print(event.type + ': <Control-Shift-Button-1>')
-        self._select_range(reel = self.nametowidget(event.widget))
-
-    def _select_range(self, keepanchor = True, exclusive = False, flip=False, anchor = None, reel = None):
-        print('Selecting ' + ('exclusive' if exclusive else '') +  ' range: ', end='')
-
-        #print(self._anchor_cell.cell_index + ' to ' + self._reel_cell.cell_index)
-
-        if exclusive:
-            but = [self._anchor_cell] if keepanchor else []
-            self._deselect_all(but=but)
-
-        if anchor:
-            self._set_anchor(anchor, add=True)
-
-        if reel:
-            self._set_reel(reel)
-        
-        anchor_coordinates = (a_row, a_column) = self._cells_inverse[self._anchor_cell]
-
-        prev_reel_cell = self._anchor_cell if exclusive else self._prev_reel_cell
-
-        prev_reel_coordinates = (p_row, p_column) = self._cells_inverse[prev_reel_cell]
-        reel_coordinates = (r_row, r_column) = self._cells_inverse[self._reel_cell]
-    
-        row_range = self._closed_range(a_row, r_row)[::-1]
-        if self._prev_reel_cell:
-            prev_row_range = self._closed_range(a_row, p_row)[::-1]
-
-        column_range = self._closed_range(a_column, r_column)[::-1]
-        if self._prev_reel_cell:
-            prev_column_range = self._closed_range(a_column, p_column)[::-1]
-
-
-
-        if row_range[-1] > prev_row_range[-1]:
-            print('The row minimum increased')
-            for row in range(prev_row_range[-1], row_range[-1]):
-                self._deselect_cells([self._cells[(row, column)] for column in prev_column_range])
-
-        elif row_range[0] < prev_row_range[0]:
-            print('The row maximum decreased')
-            for row in range(prev_row_range[0], row_range[0], -1):
-                self._deselect_cells([self._cells[(row, column)] for column in prev_column_range])
-
-        if row_range[-1] < prev_row_range[-1]:
-            print('The row minimum decreased')
-            for row in range(row_range[-1], prev_row_range[-1]):
-                self._select_cells([self._cells[(row, column)] for column in prev_column_range])
-
-        elif row_range[0] > prev_row_range[0]:
-            print('The row maximum increased')
-            for row in range(row_range[0], prev_row_range[0], -1):
-                self._select_cells([self._cells[(row, column)] for column in prev_column_range])
-
-        
-
-        
-        if column_range[-1] > prev_column_range[-1]:
-            print('The column minimum increased')
-            for column in range(prev_column_range[-1], column_range[-1]):
-                self._deselect_cells([self._cells[(row, column)] for row in row_range])
-
-        elif column_range[0] < prev_column_range[0]:
-            print('The column maximum decreased')
-            for column in range(prev_column_range[0], column_range[0], -1):
-                self._deselect_cells([self._cells[(row, column)] for row in row_range])
-
-
-        if column_range[-1] < prev_column_range[-1]:
-            print('The column minimum decreased')
-            for column in range(column_range[-1], prev_column_range[-1]):
-                self._select_cells([self._cells[(row, column)] for row in row_range])
-
-        elif column_range[0] > prev_column_range[0]:
-            print('The column maximum increased')
-            for column in range(column_range[0], prev_column_range[0], -1):
-                self._select_cells([self._cells[(row, column)] for row in row_range])
-
-
-    def _on_spreadsheet_mouse_motion(self, event):
-        self._set_reel(self.winfo_containing(event.x_root, event.y_root))
-        if self._reel_cell not in self._cells.values():
-            print(str(self._reel_cell) + ' is out of bounds')
-            return
-        if self._prev_reel_cell in self._cells.values():
-            self._select_range(exclusive=False)
-        else:
-            print("Coming from out of bounds")
-            self._select_range(exclusive = True)
-
-    def _on_spreadsheet_backspace(self, event):
-        self._erase_selected_cell_contents()
-
-    def _on_spreadsheet_delete(self, event):
-        self._erase_selected_cell_contents()
-
-    def _erase_selected_cell_contents(self):
-        for e in self._selected_cells:
-            self._erase_cell_contents(e)
-
-    def _erase_cell_contents(self, entry_widget):
-        entry_widget.display_value = ''
-
-    def _on_spreadsheet_typing_left(self, event):
-        entry_widget = self.nametowidget(event.widget)
-        if entry_widget.selection_present():
-            entry_widget.icursor(entry_widget.index(tk.ANCHOR) + 1)
-            
-
-    def _on_spreadsheet_typing_right(self, event = None):
-        entry_widget = self.nametowidget(event.widget)
-        if entry_widget.selection_present():
-            entry_widget.icursor(entry_widget.index(tk.ANCHOR) - 1)
-
-    def _on_spreadsheet_mouse_release(self, event):
-        self._set_reel(self.winfo_containing(event.x_root, event.y_root))
-
-    def _on_spreadsheet_control_backspace(self, event):
-        if self.focus_get() == event.widget:
-            entry_widget = self.nametowidget(event.widget)
-            self._erase_cell_contents(entry_widget)
-            entry_widget.icursor(0)
-            self._guarantee_widget_focus = entry_widget
-
-    def _on_entry_focus_out(self, event=None):
-        print('Focus out!')
-        if self._guarantee_widget_focus:
-            self.nametowidget(event.widget).focus_set()
-
-        self._guarantee_widget_focus = None
-
-    def _on_column_label_click(self, event, exclusive = True):
-        column = self._column_labels.index(self.nametowidget(event.widget))
-        self._select_column(column, exclusive = exclusive)
-        self._column_y = event.y_root
-
-    def _on_column_label_control_click(self, event):
-        self._on_column_label_click(event, exclusive = False)
-
-    def _on_column_label_shift_click(self, event, exclusive=True):
-        (_, anchor_col) = self._cells_inverse[self._anchor_cell]
-        event_col = self._column_labels.index(self.nametowidget(event.widget))
-        self._select_range(anchor=(0, anchor_col), reel=(self.spreadsheet_rows - 1, event_col), keepanchor = True, exclusive = exclusive)
-
-    def _select_column(self, column, exclusive = True):
-        print('Selecting column ' + str(column))
-        self._select_range(anchor = (0, column), keepanchor = False, reel = (self.spreadsheet_rows - 1, column), exclusive = exclusive)
-
-    def _select_columns(self, rng):
-        for col in rng:
-            self._select_column(col)
-
-    def _on_column_label_mouse_motion(self, event):
-        reel_col = self._column_labels.index(self.winfo_containing(event.x_root, self._column_y))
-        self._select_range(exclusive=False, keepanchor=True, reel=(-1, reel_col))
-
-    def _on_row_label_click(self, event, exclusive = True):
-        row = self._row_labels.index(self.nametowidget(event.widget))
-        self._select_row(row, exclusive = exclusive)
-
-    def _on_row_label_control_click(self, event):
-        self._on_row_label_click(event, exclusive = False)
-
-    def _on_row_label_shift_click(self, event, exclusive=True):
-        (anchor_row, _) = self._get_anchor_coords()
-        event_row = self._row_labels.index(self.nametowidget(event.widget))
-        if exclusive:
-            self._deselect_all()
-        for row in self._closed_range(anchor_row, event_row):
-            self._select_row(row, exclusive = False, anchor=False)
-        self._set_anchor(self._cells[(anchor_row, 0)])
-
-    def _select_row(self, row, exclusive = True, anchor=True):
-        self._select_cells([self._cells[(row, column)] for column in range(self.spreadsheet_columns)], exclusive = exclusive)
-        if anchor:
-            self._set_anchor((row, 0))
-
-    def _select_cell_indices(self, indices):
-        self._select_cells([self._cells[index] for index in indices])
-
-
     def __init__(self, program_paths, parent, rows, columns):
         tk.Frame.__init__(self, parent)
 
@@ -576,6 +166,417 @@ class Spreadsheet(tk.Frame):
         self._guarantee_focus = False
 
         self.god_entry.focus_set()
+
+
+    def _select_all(self, event):
+        print('Selecting all cells in the grid!')
+        self._select_range(exclusive=True, anchor='A1', reel=(-1, -1))
+
+    def _select_cells(self, entry_widgets, exclusive=False):
+        print('Selecting cells ' + str([cell.cell_index for cell in entry_widgets]))
+        if exclusive:
+            self._restore_borders(entry_widgets)
+            self._selected_cells = []
+        
+        [self._select_cell(cell, exclusive=False) for cell in entry_widgets]
+
+    def _select_cell(self, entry_widget, anchor=False, exclusive=False, flip=False):
+        print('Selecting cell ' + repr(entry_widget))
+
+        if exclusive:
+            self._deselect_all()          
+
+        if entry_widget in self._selected_cells:
+            if flip:
+                print('flip')
+                self._deselect_cell(entry_widget)
+            else:
+                if anchor:
+                    self._set_anchor(entry_widget)
+                return
+        elif anchor:
+            self._set_anchor(entry_widget)
+        else:
+            entry_widget.config(highlightbackground = 'darkgreen')
+
+        self._selected_cells.append(entry_widget)
+
+        self.god_entry.focus_set()
+
+        print('self._selected_cells now is ' + str(self._selected_cells))
+
+
+    def _select_range(self, keepanchor = True, exclusive = False, flip=False, anchor = None, reel = None):
+        print('Selecting ' + ('exclusive' if exclusive else '') +  ' range: ', end='')
+
+        #print(self._anchor_cell.cell_index + ' to ' + self._reel_cell.cell_index)
+
+        if exclusive:
+            but = [self._anchor_cell] if keepanchor else []
+            self._deselect_all(but=but)
+
+        if anchor:
+            self._set_anchor(anchor, add=True)
+
+        if reel:
+            self._set_reel(reel)
+        
+        anchor_coordinates = (a_row, a_column) = self._cells_inverse[self._anchor_cell]
+
+        prev_reel_cell = self._anchor_cell if exclusive else self._prev_reel_cell
+
+        prev_reel_coordinates = (p_row, p_column) = self._cells_inverse[prev_reel_cell]
+        reel_coordinates = (r_row, r_column) = self._cells_inverse[self._reel_cell]
+    
+        row_range = self._closed_range(a_row, r_row)[::-1]
+        if self._prev_reel_cell:
+            prev_row_range = self._closed_range(a_row, p_row)[::-1]
+
+        column_range = self._closed_range(a_column, r_column)[::-1]
+        if self._prev_reel_cell:
+            prev_column_range = self._closed_range(a_column, p_column)[::-1]
+
+
+
+        if row_range[-1] > prev_row_range[-1]:
+            print('The row minimum increased')
+            for row in range(prev_row_range[-1], row_range[-1]):
+                self._deselect_cells([self._cells[(row, column)] for column in prev_column_range])
+
+        elif row_range[0] < prev_row_range[0]:
+            print('The row maximum decreased')
+            for row in range(prev_row_range[0], row_range[0], -1):
+                self._deselect_cells([self._cells[(row, column)] for column in prev_column_range])
+
+        if row_range[-1] < prev_row_range[-1]:
+            print('The row minimum decreased')
+            for row in range(row_range[-1], prev_row_range[-1]):
+                self._select_cells([self._cells[(row, column)] for column in prev_column_range])
+
+        elif row_range[0] > prev_row_range[0]:
+            print('The row maximum increased')
+            for row in range(row_range[0], prev_row_range[0], -1):
+                self._select_cells([self._cells[(row, column)] for column in prev_column_range])
+
+        
+
+        
+        if column_range[-1] > prev_column_range[-1]:
+            print('The column minimum increased')
+            for column in range(prev_column_range[-1], column_range[-1]):
+                self._deselect_cells([self._cells[(row, column)] for row in row_range])
+
+        elif column_range[0] < prev_column_range[0]:
+            print('The column maximum decreased')
+            for column in range(prev_column_range[0], column_range[0], -1):
+                self._deselect_cells([self._cells[(row, column)] for row in row_range])
+
+
+        if column_range[-1] < prev_column_range[-1]:
+            print('The column minimum decreased')
+            for column in range(column_range[-1], prev_column_range[-1]):
+                self._select_cells([self._cells[(row, column)] for row in row_range])
+
+        elif column_range[0] > prev_column_range[0]:
+            print('The column maximum increased')
+            for column in range(column_range[0], prev_column_range[0], -1):
+                self._select_cells([self._cells[(row, column)] for row in row_range])
+
+
+    def _get_cell_value(self, cell_index, stringify):
+        cell = self._normalize_cell_notation(cell_index)
+
+        value =  cell.get()
+
+        if stringify:
+            value = "'" + value + "'"
+
+        return value
+
+    def _cell_convert(self, value, stringify=False):
+        return re.sub(r'\[.*?\]', lambda match: self._get_cell_value(match[0], stringify), value)
+
+    def _process_formula(self, formula, number_based = True):
+        if formula and formula[0] == '=' and len(formula) > 1:
+            converted_value = self._cell_convert(formula[1:], not number_based)
+            if number_based:
+                return str(arithmetic_evaluator.evaluate_expression(converted_value))#value[1:]))
+            else:
+                return eval(converted_value)
+        else:
+            return formula
+
+    def _on_spreadsheet_cell_exit(self, c, v):
+        print('leaving cell!')
+
+        cell = self.nametowidget(c)
+
+        value = cell.display_value.strip()
+
+        try:
+            value = self._process_formula(value)
+        except TypeError:
+            value = self._process_formula(value, number_based = False)
+        try:
+            float(value)
+            cell.config(justify='right')
+        except ValueError:
+            cell.config(justify='left')
+
+        cell.config(state='disabled', cursor='plus')
+
+        cell.display_value = value
+
+        return True
+
+    def _restore_borders(self, new, method='normal'):
+        print('restore borders')
+        hlbg = 'darkgreen' if method == 'selected' else 'ghost white'
+
+        if type(new) != list:
+            new = [new]
+        for old in self._selected_cells:
+            if old not in new:
+                old.config(highlightbackground = hlbg)
+
+    def _deselect_all(self, but=[]):
+        print('deselect all')
+
+        self._deselect_cells([cell for cell in self._selected_cells if cell not in but])
+
+    def _deselect_cells(self, cells):
+        print('Deselecting cells ' + repr(cells))
+        [self._deselect_cell(cell) for cell in cells]
+
+    def _deselect_cell(self, cell):
+        #print('deselect cell : ' + str(cell))
+        try:
+            self._selected_cells.remove(cell)
+            cell.config(highlightbackground = 'ghost white')
+            if cell == self._anchor_cell:
+                anchor = self._selected_cells[-1] if self._selected_cells else None
+                self._set_anchor(anchor)
+        except ValueError:
+            pass
+
+
+    def _set_reel(self, cell, col=None):
+        cell = self._normalize_cell_notation(cell)
+
+        self._reel_cell, self._prev_reel_cell = cell, self._reel_cell
+
+        print('Reel cell is now ' + repr(self._reel_cell))
+
+    def _normalize_cell_notation(self, cell, col=None):
+        if type(cell) == int:
+            if cell == -1:
+                cell = self.spreadsheet_rows - 1
+            if col == -1:
+                cell = self.spreadsheet_columns - 1
+            cell = self._cells[(cell, col)]
+        elif type(cell) == tuple:
+            if cell[0] == -1:
+                cell = (self.spreadsheet_rows - 1, cell[1])
+            if cell[1] == -1:
+                cell = (cell[0], self.spreadsheet_columns - 1)
+            cell = self._cells[cell]
+        elif type(cell) == str:
+            cell = self._cells[utils.get_cell_coordinates(cell)]
+
+        return cell
+
+    def _set_anchor(self, cell, col = None, add = False):        
+        if not cell and cell != 0:
+            self._anchor_cell = None
+            return
+
+        cell = self._normalize_cell_notation(cell)
+
+        print('Setting cell ' + repr(cell) + ' to anchor')
+
+        self._anchor_cell = cell
+        cell.config(highlightbackground = 'goldenrod')
+        self._restore_borders(self._anchor_cell, method='selected')
+
+        self._set_reel(cell)
+
+        if add and cell not in self._selected_cells:
+            self._selected_cells.append(cell)
+
+    def _export_to_csv(self, event=None):
+        values = self.get()
+
+        filename = filedialog.asksaveasfilename(title='Export to CSV', initialdir=self.program_paths['index'], filetypes=[('Comma Separated Values', '*.csv')])
+        
+        if not filename:
+            return
+
+        if filename[-4:].lower() != '.csv':
+            filename += '.csv'
+
+        with open(filename, "w+", newline='') as f:
+            writer = csv.writer(f, skipinitialspace=True)
+            writer.writerows(values) 
+
+        os.startfile(filename)
+
+
+    def _entry_focus(self, entry_widget, highlight=True):
+        print('Focus on entry: ' + str(entry_widget))
+        if not entry_widget:
+            return
+
+        entry_widget.config(state='normal', cursor='xterm')
+        entry_widget.focus_set()
+        if highlight:
+            entry_widget.selection_range(0, 'end')
+        entry_widget.icursor(tk.END)
+
+        if entry_widget.get():
+            return 'break'
+
+    def _on_spreadsheet_click(self, event):
+        print(event.type + ': <Button-1>')
+        entry_widget = self.nametowidget(event.widget)
+
+        if not self.focus_get() == event.widget:
+            if [entry_widget] == self._selected_cells:
+                return self._entry_focus(entry_widget)
+            else:
+                self._select_cell(entry_widget, anchor=True, exclusive=True)
+                self.god_entry.focus_set()
+
+    def _on_spreadsheet_control_click(self, event):
+        print(event.type + ': <Control-Button-1>')
+        entry_widget = self.nametowidget(event.widget)
+        self._select_cell(entry_widget, anchor=True, flip=True)
+
+    def _closed_range(self, a, b):
+        start = None
+        stop = None
+        
+        if a < b:
+            start = a
+            stop = b
+        else:
+            start = b
+            stop = a
+
+        return range(start, stop + 1)
+
+    def _on_spreadsheet_shift_click(self, event):
+        print(event.type + ': <Shift-Button-1>')
+        self._deselect_all(but=[self._anchor_cell])
+        self._select_range(reel = self.nametowidget(event.widget), exclusive = True)
+
+    def _on_spreadsheet_control_shift_click(self, event):
+        print(event.type + ': <Control-Shift-Button-1>')
+        self._select_range(reel = self.nametowidget(event.widget))
+
+
+
+    def _on_spreadsheet_mouse_motion(self, event):
+        self._set_reel(self.winfo_containing(event.x_root, event.y_root))
+        if self._reel_cell not in self._cells.values():
+            print(str(self._reel_cell) + ' is out of bounds')
+            return
+        if self._prev_reel_cell in self._cells.values():
+            self._select_range(exclusive=False)
+        else:
+            print("Coming from out of bounds")
+            self._select_range(exclusive = True)
+
+    def _on_spreadsheet_backspace(self, event):
+        self._erase_selected_cell_contents()
+
+    def _on_spreadsheet_delete(self, event):
+        self._erase_selected_cell_contents()
+
+    def _erase_selected_cell_contents(self):
+        for e in self._selected_cells:
+            self._erase_cell_contents(e)
+
+    def _erase_cell_contents(self, entry_widget):
+        entry_widget.display_value = ''
+
+    def _on_spreadsheet_typing_left(self, event):
+        entry_widget = self.nametowidget(event.widget)
+        if entry_widget.selection_present():
+            entry_widget.icursor(entry_widget.index(tk.ANCHOR) + 1)
+            
+
+    def _on_spreadsheet_typing_right(self, event = None):
+        entry_widget = self.nametowidget(event.widget)
+        if entry_widget.selection_present():
+            entry_widget.icursor(entry_widget.index(tk.ANCHOR) - 1)
+
+    def _on_spreadsheet_mouse_release(self, event):
+        self._set_reel(self.winfo_containing(event.x_root, event.y_root))
+
+    def _on_spreadsheet_control_backspace(self, event):
+        if self.focus_get() == event.widget:
+            entry_widget = self.nametowidget(event.widget)
+            self._erase_cell_contents(entry_widget)
+            entry_widget.icursor(0)
+            self._guarantee_widget_focus = entry_widget
+
+    def _on_entry_focus_out(self, event=None):
+        print('Focus out!')
+        if self._guarantee_widget_focus:
+            self.nametowidget(event.widget).focus_set()
+
+        self._guarantee_widget_focus = None
+
+    def _on_column_label_click(self, event, exclusive = True):
+        column = self._column_labels.index(self.nametowidget(event.widget))
+        self._select_column(column, exclusive = exclusive)
+        self._column_y = event.y_root
+
+    def _on_column_label_control_click(self, event):
+        self._on_column_label_click(event, exclusive = False)
+
+    def _on_column_label_shift_click(self, event, exclusive=True):
+        (_, anchor_col) = self._cells_inverse[self._anchor_cell]
+        event_col = self._column_labels.index(self.nametowidget(event.widget))
+        self._select_range(anchor=(0, anchor_col), reel=(self.spreadsheet_rows - 1, event_col), keepanchor = True, exclusive = exclusive)
+
+    def _select_column(self, column, exclusive = True):
+        print('Selecting column ' + str(column))
+        self._select_range(anchor = (0, column), keepanchor = False, reel = (self.spreadsheet_rows - 1, column), exclusive = exclusive)
+
+    def _select_columns(self, rng):
+        for col in rng:
+            self._select_column(col)
+
+    def _on_column_label_mouse_motion(self, event):
+        reel_col = self._column_labels.index(self.winfo_containing(event.x_root, self._column_y))
+        self._select_range(exclusive=False, keepanchor=True, reel=(-1, reel_col))
+
+    def _on_row_label_click(self, event, exclusive = True):
+        row = self._row_labels.index(self.nametowidget(event.widget))
+        self._select_row(row, exclusive = exclusive)
+
+    def _on_row_label_control_click(self, event):
+        self._on_row_label_click(event, exclusive = False)
+
+    def _on_row_label_shift_click(self, event, exclusive=True):
+        (anchor_row, _) = self._get_anchor_coords()
+        event_row = self._row_labels.index(self.nametowidget(event.widget))
+        if exclusive:
+            self._deselect_all()
+        for row in self._closed_range(anchor_row, event_row):
+            self._select_row(row, exclusive = False, anchor=False)
+        self._set_anchor(self._cells[(anchor_row, 0)])
+
+    def _select_row(self, row, exclusive = True, anchor=True):
+        self._select_cells([self._cells[(row, column)] for column in range(self.spreadsheet_columns)], exclusive = exclusive)
+        if anchor:
+            self._set_anchor((row, 0))
+
+    def _select_cell_indices(self, indices):
+        self._select_cells([self._cells[index] for index in indices])
+
+
 
     def _on_spreadsheet_escape(self, event):
         self._select_cell(self._anchor_cell, exclusive=True, anchor=True)
