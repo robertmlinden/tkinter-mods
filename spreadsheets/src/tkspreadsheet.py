@@ -29,6 +29,9 @@ class Cell(tk.Entry):
     def display_value(self, value):
         self.sv.set(value)
 
+    def __repr__(self):
+        return self.cell_index
+
 class Spreadsheet(tk.Frame):
     def _on_entry_keystroke(self, sv):
         print(sv.get())
@@ -90,29 +93,26 @@ class Spreadsheet(tk.Frame):
 
         if type(new) != list:
             new = [new]
-        for old in self._solidified_cells:
+        for old in self._selected_cells:
             if old not in new:
                 old.config(highlightbackground = hlbg)
 
-    def _deselect_all(self, solidify=False):
+    def _deselect_all(self, but=[]):
         print('deselect all')
 
-        cells = self._solidified_cells if solidify else self._selected_cells
+        self._deselect_cells([cell for cell in self._selected_cells if cell not in but])
 
-        self._deselect_cells(cells, solidify=solidify)
+    def _deselect_cells(self, cells):
+        print('Deselecting cells ' + repr(cells))
+        [self._deselect_cell(cell) for cell in cells]
 
-    def _deselect_cells(self, cells, solidify=False):
-        print('Deselecting cells ' + str([cell.cell_index for cell in cells]))
-        [self._deselect_cell(cell, solidify=solidify) for cell in cells]
-
-    def _deselect_cell(self, cell, solidify=False):
+    def _deselect_cell(self, cell):
         #print('deselect cell : ' + str(cell))
         try:
-            cells = self._solidified_cells if solidify else self._selected_cells
-            cells.remove(cell)
+            self._selected_cells.remove(cell)
             cell.config(highlightbackground = 'ghost white')
             if cell == self._anchor_cell:
-                anchor = self._selected_cells[-1] if self._selected_cells else self._solidified_cells[-1] if self._solidified_cells else None
+                anchor = self._selected_cells[-1] if self._selected_cells else None
                 self._set_anchor(anchor)
         except ValueError:
             pass
@@ -120,27 +120,25 @@ class Spreadsheet(tk.Frame):
     def _select_all(self, event):
         print('Selecting all cells in the grid!')
         for column in range(self.spreadsheet_columns):
-            self._select_column(column, exclusive = False, solidify=False)
+            self._select_column(column, exclusive = False)
 
         self._set_anchor((0, 0))
 
-    def _select_cells(self, entry_widgets, exclusive=True, solidify=False):
+    def _select_cells(self, entry_widgets, exclusive=False):
         print('Selecting cells ' + str([cell.cell_index for cell in entry_widgets]))
         if exclusive:
             self._restore_borders(entry_widgets)
-            self._solidified_cells = []
+            self._selected_cells = []
         
-        [self._select_cell(cell, exclusive=False, solidify=solidify) for cell in entry_widgets]
+        [self._select_cell(cell, exclusive=False) for cell in entry_widgets]
 
-    def _select_cell(self, entry_widget, anchor=False, exclusive=False, solidify=False, flip=False):
-        #print(('Solidify-' if solidify else 'Soft-') + 'Selecting cell ' + str(entry_widget))
-
-        cells = self._solidified_cells if solidify else self._selected_cells
+    def _select_cell(self, entry_widget, anchor=False, exclusive=False, flip=False):
+        print('Selecting cell ' + repr(entry_widget))
 
         if exclusive:
-                     
+            self._deselect_all()          
 
-        if entry_widget in cells:
+        if entry_widget in self._selected_cells:
             if flip:
                 print('flip')
                 self._deselect_cell(entry_widget)
@@ -151,16 +149,16 @@ class Spreadsheet(tk.Frame):
         else:
             entry_widget.config(highlightbackground = 'darkgreen')
 
-        cells.append(entry_widget)
+        self._selected_cells.append(entry_widget)
 
         self.god_entry.focus_set()
 
-        #print(('self._solidified_cells' if solidify else 'self._selected_cells') + ' now is ' + str(cells))
-        #print(('self._solidified_cells' if not solidify else 'self._selected_cells') + ' now is ' + 
-        #            str(self._solidified_cells) if not solidify else str(self._selected_cells))
+        print('self._selected_cells now is ' + str(self._selected_cells))
 
     def _set_reel(self, cell):
         self._reel_cell, self._prev_reel_cell = cell, self._reel_cell
+
+        print('Reel cell is now ' + repr(self._reel_cell))
 
     def _set_anchor(self, cell = None):
         print('Setting cell ' + str(cell) + ' to anchor')
@@ -171,14 +169,11 @@ class Spreadsheet(tk.Frame):
             return
 
         if type(cell) == tuple:
-            cell = self.nametowidget(self._cells[cell])
+            cell = self._cells[cell]
 
         self._anchor_cell = cell
         cell.config(highlightbackground = 'goldenrod')
         self._restore_borders(self._anchor_cell, method='selected')
-
-    def _solidify(self):
-        self._solidified_cells.extend(self._selected_cells)
 
     def _export_to_csv(self, event=None):
         values = self.get()
@@ -216,21 +211,19 @@ class Spreadsheet(tk.Frame):
         print(event.type + ': <Button-1>')
         entry_widget = self.nametowidget(event.widget)
 
-        (self._min_motion_row, self._min_motion_column) = \
-        (self._max_motion_row, self._max_motion_column) = self._cells_inverse[entry_widget]
-
         if not self.focus_get() == event.widget:
-            if [entry_widget] == self._solidified_cells:
+            if [entry_widget] == self._selected_cells:
                 return self._entry_focus(entry_widget)
             else:
-                self._select_cell(entry_widget, anchor=True, exclusive=True, solidify=False)
+                self._select_cell(entry_widget, anchor=True, exclusive=True)
+                self._set_reel(entry_widget)
                 self.god_entry.focus_set()
 
     def _on_spreadsheet_control_click(self, event):
         print(event.type + ': <Control-Button-1>')
-        focus_widget = self.nametowidget(self.focus_get())
         entry_widget = self.nametowidget(event.widget)
         self._select_cell(entry_widget, anchor=True, flip=True)
+        self._set_reel(entry_widget)
 
     def _closed_range(self, a, b):
         start = None
@@ -248,7 +241,7 @@ class Spreadsheet(tk.Frame):
     def _on_spreadsheet_shift_click(self, event):
         print(event.type + ': <Shift-Button-1>')
         self._set_reel(self.nametowidget(event.widget))
-        self._deselect_all(solidify=True)
+        self._deselect_all(but=[self._anchor_cell])
         self._select_range(exclusive = True)
 
     def _on_spreadsheet_control_shift_click(self, event):
@@ -257,84 +250,84 @@ class Spreadsheet(tk.Frame):
         self._select_range()
 
     def _select_range(self, exclusive = False, flip=False):
-        print('Selecting range: ', end='')
+        print('Selecting ' + ('exclusive' if exclusive else '') +  ' range: ', end='')
         print(self._anchor_cell.cell_index + ' to ' + self._reel_cell.cell_index)
 
         anchor_coordinates = (a_row, a_column) = self._cells_inverse[self._anchor_cell]
-        prev_reel_coordinates = (p_row, p_column) = self._cells_inverse[self._prev_reel_cell]
-        reel_coordinates = (r_row, r_column) = self._cells_inverse[self._reel_cell]
-        
-        cells = []
 
+        prev_reel_cell = self._anchor_cell if exclusive else self._prev_reel_cell
+
+        prev_reel_coordinates = (p_row, p_column) = self._cells_inverse[prev_reel_cell]
+        reel_coordinates = (r_row, r_column) = self._cells_inverse[self._reel_cell]
+
+        if exclusive:
+            self._deselect_all(but=[self._anchor_cell])
+    
         row_range = self._closed_range(a_row, r_row)[::-1]
-        prev_row_range = self._closed_range(a_row, p_row)[::-1]
+        if self._prev_reel_cell:
+            prev_row_range = self._closed_range(a_row, p_row)[::-1]
 
         column_range = self._closed_range(a_column, r_column)[::-1]
-        prev_column_range = self._closed_range(a_column, p_column)[::-1]
-    
-        _min_motion_row = row_range[-1]
-        _min_motion_column = column_range[-1]
-        _max_motion_row = row_range[0]
-        _max_motion_column = column_range[0]
+        if self._prev_reel_cell:
+            prev_column_range = self._closed_range(a_column, p_column)[::-1]
 
 
-        if _min_motion_row > self._min_motion_row:
+
+        if row_range[-1] > prev_row_range[-1]:
             print('The row minimum increased')
-            for row in range(self._min_motion_row, _min_motion_row):
-                self._deselect_cells([self._cells[(row, column)] for column in prev_column_range], solidify=False)
+            for row in range(prev_row_range[-1], row_range[-1]):
+                self._deselect_cells([self._cells[(row, column)] for column in prev_column_range])
 
-        elif _max_motion_row < self._max_motion_row:
+        elif row_range[0] < prev_row_range[0]:
             print('The row maximum decreased')
-            for row in range(self._max_motion_row, _max_motion_row, -1):
-                self._deselect_cells([self._cells[(row, column)] for column in prev_column_range], solidify=False)
+            for row in range(prev_row_range[0], row_range[0], -1):
+                self._deselect_cells([self._cells[(row, column)] for column in prev_column_range])
 
-        if _min_motion_row < self._min_motion_row:
+        if row_range[-1] < prev_row_range[-1]:
             print('The row minimum decreased')
-            for row in range(_min_motion_row, self._min_motion_row):
-                self._select_cells([self._cells[(row, column)] for column in prev_column_range], exclusive=exclusive, solidify=False)
+            for row in range(row_range[-1], prev_row_range[-1]):
+                self._select_cells([self._cells[(row, column)] for column in prev_column_range])
 
-        elif _max_motion_row > self._max_motion_row:
+        elif row_range[0] > prev_row_range[0]:
             print('The row maximum increased')
-            for row in range(_max_motion_row, self._max_motion_row, -1):
-                self._select_cells([self._cells[(row, column)] for column in prev_column_range], exclusive=exclusive, solidify=False)
+            for row in range(row_range[0], prev_row_range[0], -1):
+                self._select_cells([self._cells[(row, column)] for column in prev_column_range])
 
         
 
         
-        if _min_motion_column > self._min_motion_column:
+        if column_range[-1] > prev_column_range[-1]:
             print('The column minimum increased')
-            for column in range(self._min_motion_column, _min_motion_column):
-                self._deselect_cells([self._cells[(row, column)] for row in row_range], solidify=False)
+            for column in range(prev_column_range[-1], column_range[-1]):
+                self._deselect_cells([self._cells[(row, column)] for row in row_range])
 
-        elif _max_motion_column < self._max_motion_column:
+        elif column_range[0] < prev_column_range[0]:
             print('The column maximum decreased')
-            for column in range(self._max_motion_column, _max_motion_column, -1):
-                self._deselect_cells([self._cells[(row, column)] for row in row_range], solidify=False)
+            for column in range(prev_column_range[0], column_range[0], -1):
+                self._deselect_cells([self._cells[(row, column)] for row in row_range])
 
 
-        if _min_motion_column < self._min_motion_column:
+        if column_range[-1] < prev_column_range[-1]:
             print('The column minimum decreased')
-            for column in range(_min_motion_column, self._min_motion_column):
-                self._select_cells([self._cells[(row, column)] for row in row_range], exclusive=exclusive, solidify=False)
+            for column in range(column_range[-1], prev_column_range[-1]):
+                self._select_cells([self._cells[(row, column)] for row in row_range])
 
-        elif _max_motion_column > self._max_motion_column:
+        elif column_range[0] > prev_column_range[0]:
             print('The column maximum increased')
-            for column in range(_max_motion_column, self._max_motion_column, -1):
-                self._select_cells([self._cells[(row, column)] for row in row_range], exclusive=exclusive, solidify=False)
+            for column in range(column_range[0], prev_column_range[0], -1):
+                self._select_cells([self._cells[(row, column)] for row in row_range])
 
-
-
-        self._min_motion_row = _min_motion_row
-        self._min_motion_column = _min_motion_column
-        self._max_motion_row = _max_motion_row
-        self._max_motion_column = _max_motion_column
 
     def _on_spreadsheet_mouse_motion(self, event):
         self._set_reel(self.winfo_containing(event.x_root, event.y_root))
         if self._reel_cell not in self._cells.values():
+            print(str(self._reel_cell) + ' is out of bounds')
             return
-        if self._reel_cell.config().get('state') != 'normal':
+        if self._prev_reel_cell in self._cells.values():
             self._select_range(exclusive=False)
+        else:
+            print("Coming from out of bounds")
+            self._select_range(exclusive = True)
 
     def _on_spreadsheet_backspace(self, event):
         self._erase_selected_cell_contents()
@@ -343,7 +336,7 @@ class Spreadsheet(tk.Frame):
         self._erase_selected_cell_contents()
 
     def _erase_selected_cell_contents(self):
-        for e in self._solidified_cells:
+        for e in self._selected_cells:
             self._erase_cell_contents(e)
 
     def _erase_cell_contents(self, entry_widget):
@@ -361,9 +354,6 @@ class Spreadsheet(tk.Frame):
             entry_widget.icursor(entry_widget.index(tk.ANCHOR) - 1)
 
     def _on_spreadsheet_mouse_release(self, event):
-        self._solidified_cells.extend(self._selected_cells)
-        self._selected_cells = []
-
         self._set_reel(self.winfo_containing(event.x_root, event.y_root))
 
     def _on_spreadsheet_control_backspace(self, event):
@@ -439,7 +429,6 @@ class Spreadsheet(tk.Frame):
         self.spreadsheet_rows = rows
         self.spreadsheet_columns = columns
 
-        self._solidified_cells = []
         self._anchor_cell = None
         self._reel_cell = None
         self._prev_reel_cell = None
@@ -694,7 +683,7 @@ class Spreadsheet(tk.Frame):
     def _copy_from_anchor_to_selected(self, entry = None):
         print('Updating all entries!')
         if entry == self._anchor_cell:
-            for entry_widget in self._solidified_cells:
+            for entry_widget in self._selected_cells:
                 if entry_widget == self._anchor_cell:
                     continue
                 entry_widget.display_value = self._anchor_cell.display_value
@@ -707,9 +696,9 @@ class Spreadsheet(tk.Frame):
         self._prev()
 
     def _prev(self, event = None):
-        if len(self._solidified_cells) == 1:
+        if len(self._selected_cells) == 1:
             self._on_spreadsheet_left(wrap=True)
-        elif len(self._solidified_cells) > 1:
+        elif len(self._selected_cells) > 1:
             pass
         else:
             pass
@@ -720,9 +709,9 @@ class Spreadsheet(tk.Frame):
         # return 'break'
 
     def _next(self, event = None):
-        if len(self._solidified_cells) == 1:
+        if len(self._selected_cells) == 1:
             self._on_spreadsheet_right(wrap=True)
-        elif len(self._solidified_cells) > 1:
+        elif len(self._selected_cells) > 1:
             pass
         else:
             pass
@@ -749,7 +738,7 @@ class Spreadsheet(tk.Frame):
         if reel_row > 0:
             offset = (-1, 0)
         self._set_reel(self._cells[tuple(map(add, reel_coords, offset))])
-        self._select_range(exclusive=True)
+        self._select_range()
 
     def _on_spreadsheet_alt_up(self, event=None):
         # This should move the anchor one up, nothing else should happen
@@ -761,7 +750,7 @@ class Spreadsheet(tk.Frame):
         if reel_row < self.spreadsheet_rows - 1:
             offset = (1, 0)
         self._set_reel(self._cells[tuple(map(add, reel_coords, offset))])
-        self._select_range(exclusive=True)
+        self._select_range()
 
     def _on_spreadsheet_shift_left(self, event=None):
         reel_coords = reel_row, reel_col = self._get_reel_coords()
@@ -769,7 +758,7 @@ class Spreadsheet(tk.Frame):
         if reel_col > 0:
             offset = (0, -1)
         self._set_reel(self._cells[tuple(map(add, reel_coords, offset))])
-        self._select_range(exclusive=True)
+        self._select_range()
 
 
     def _on_spreadsheet_shift_right(self, event=None):
@@ -778,13 +767,13 @@ class Spreadsheet(tk.Frame):
         if reel_col < self.spreadsheet_columns - 1:
             offset = (0, 1)
         self._set_reel(self._cells[tuple(map(add, reel_coords, offset))])
-        self._select_range(exclusive=True)
+        self._select_range()
 
     def _on_spreadsheet_up(self, event = None, exclusive = True):
         if self._anchor_cell:
             anchor_row, anchor_col = self._get_anchor_coords()
             if anchor_row > 0:
-                self._select_cell(self._cells[(anchor_row - 1, anchor_col)], anchor=True, exclusive=exclusive, solidify=True)
+                self._select_cell(self._cells[(anchor_row - 1, anchor_col)], anchor=True, exclusive=exclusive)
             return 'break'
         else:
             self._set_anchor(self._cells[(0, 0)])
@@ -792,22 +781,22 @@ class Spreadsheet(tk.Frame):
     def _on_spreadsheet_down(self, event = None, exclusive = True):
         anchor_row, anchor_col = self._get_anchor_coords()
         if anchor_row < self.spreadsheet_rows - 1:
-            self._select_cell(self._cells[(anchor_row + 1, anchor_col)], anchor=True, exclusive=exclusive, solidify=True)
+            self._select_cell(self._cells[(anchor_row + 1, anchor_col)], anchor=True, exclusive=exclusive)
         return 'break'
 
     def _on_spreadsheet_left(self, event = None, exclusive = True, wrap=False):
         anchor_row, anchor_col = self._get_anchor_coords()
         if anchor_col > 0:
-            self._select_cell(self._cells[(anchor_row, anchor_col - 1)], anchor=True, exclusive=exclusive, solidify=True)
+            self._select_cell(self._cells[(anchor_row, anchor_col - 1)], anchor=True, exclusive=exclusive)
         elif wrap and anchor_row > 0:
-            self._select_cell(self._cells[(anchor_row - 1, self.spreadsheet_columns - 1)], anchor=True, exclusive=exclusive, solidify=True)
+            self._select_cell(self._cells[(anchor_row - 1, self.spreadsheet_columns - 1)], anchor=True, exclusive=exclusive)
 
     def _on_spreadsheet_right(self, event = None, exclusive = True, wrap=False):
         anchor_row, anchor_col = self._get_anchor_coords()
         if anchor_col < self.spreadsheet_columns - 1:
-            self._select_cell(self._cells[(anchor_row, anchor_col + 1)], anchor=True, exclusive=exclusive, solidify=True)
+            self._select_cell(self._cells[(anchor_row, anchor_col + 1)], anchor=True, exclusive=exclusive)
         elif wrap and anchor_row < self.spreadsheet_rows - 1:
-            self._select_cell(self._cells[(anchor_row + 1, 0)], anchor=True, exclusive=exclusive, solidify=True)
+            self._select_cell(self._cells[(anchor_row + 1, 0)], anchor=True, exclusive=exclusive)
 
 
     def get(self):
