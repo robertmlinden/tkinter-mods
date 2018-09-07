@@ -136,6 +136,7 @@ class Spreadsheet(tk.Frame):
             l.bind('<Control-Button-1>', self._on_row_label_control_click)
             l.bind('<Shift-Button-1>', self._on_row_label_shift_click)
             l.bind('<Control-Shift-Button-1>', lambda event: self._on_row_label_shift_click(event, exclusive=False))
+            l.bind('<B1-Motion>', self._on_row_label_mouse_motion)
             self._row_labels.append(l)
 
         # create the table of widgets
@@ -202,11 +203,15 @@ class Spreadsheet(tk.Frame):
         self.god_entry.bind('<Control-Key-I>', self._convert_to_inverse)
         self.god_entry.bind('<Control-Key-i>', self._print_inverse)
         self.god_entry.bind('<Control-Key-E>', self._export_to_csv)
+        self.god_entry.bind('<Control-Key-p>', self._dot_plot)
         self.god_entry.bind('<Escape>', self._on_spreadsheet_escape)
 
         self._guarantee_focus = False
 
-        self.god_entry.focus_set()
+        self.containing_frame.focus_set()
+
+    def _dot_plot(self, event):
+        pass
 
     def _get_formatted_value(self, match, stringify=False):
         cell = self._cells[utils.normalize_cell_notation(self, match)]
@@ -229,13 +234,13 @@ class Spreadsheet(tk.Frame):
         print('Selecting all cells in the grid!')
         self._select_range(exclusive=True, anchor='A1', reel=(-1, -1))
 
-    def _select_cells(self, entry_widgets, exclusive=False):
+    def _select_cells(self, entry_widgets, exclusive=False, flip=False):
         print('Selecting cells ' + str([cell.cell_index for cell in entry_widgets]))
         if exclusive:
             self._restore_borders(entry_widgets)
             self._selected_cells = []
         
-        [self._select_cell(cell, exclusive=False) for cell in entry_widgets]
+        [self._select_cell(cell, exclusive=False, flip=flip) for cell in entry_widgets]
 
     def _select_cell(self, entry_widget, anchor=False, exclusive=False, flip=False):
         print('Selecting cell ' + repr(entry_widget))
@@ -253,10 +258,10 @@ class Spreadsheet(tk.Frame):
                 return
         elif anchor:
             self._set_anchor(entry_widget)
+            self._selected_cells.append(entry_widget)
         else:
             entry_widget.config(highlightbackground = 'darkgreen')
-
-        self._selected_cells.append(entry_widget)
+            self._selected_cells.append(entry_widget)
 
         self.god_entry.focus_set()
 
@@ -274,15 +279,20 @@ class Spreadsheet(tk.Frame):
         [self._deselect_cell(cell) for cell in cells]
 
     def _deselect_cell(self, cell):
-        #print('deselect cell : ' + str(cell))
+        print('deselect cell : ' + repr(cell))
         try:
             self._selected_cells.remove(cell)
             cell.config(highlightbackground = 'ghost white')
             if cell == self._anchor_cell:
+                print('Anchor')
                 anchor = self._selected_cells[-1] if self._selected_cells else None
                 self._set_anchor(anchor)
         except ValueError:
             pass
+
+        if not self._selected_cells:
+            print('no selected cells')
+            self.containing_frame.focus_set()
 
 
     def _restore_borders(self, new, method='normal'):
@@ -297,8 +307,6 @@ class Spreadsheet(tk.Frame):
 
     def _select_range(self, keepanchor = True, exclusive = False, flip=False, anchor = None, reel = None):
         print('Selecting ' + ('exclusive' if exclusive else '') +  ' range: ', end='')
-
-        #print(self._anchor_cell.cell_index + ' to ' + self._reel_cell.cell_index)
 
         if exclusive:
             but = [self._anchor_cell] if keepanchor else []
@@ -338,12 +346,12 @@ class Spreadsheet(tk.Frame):
         if row_range[-1] < prev_row_range[-1]:
             print('The row minimum decreased')
             for row in range(row_range[-1], prev_row_range[-1]):
-                self._select_cells([self._cells[(row, column)] for column in prev_column_range])
+                self._select_cells([self._cells[(row, column)] for column in prev_column_range], flip=flip)
 
         elif row_range[0] > prev_row_range[0]:
             print('The row maximum increased')
             for row in range(row_range[0], prev_row_range[0], -1):
-                self._select_cells([self._cells[(row, column)] for column in prev_column_range])
+                self._select_cells([self._cells[(row, column)] for column in prev_column_range], flip=flip)
 
         
 
@@ -362,22 +370,26 @@ class Spreadsheet(tk.Frame):
         if column_range[-1] < prev_column_range[-1]:
             print('The column minimum decreased')
             for column in range(column_range[-1], prev_column_range[-1]):
-                self._select_cells([self._cells[(row, column)] for row in row_range])
+                self._select_cells([self._cells[(row, column)] for row in row_range], flip=flip)
 
         elif column_range[0] > prev_column_range[0]:
             print('The column maximum increased')
             for column in range(column_range[0], prev_column_range[0], -1):
-                self._select_cells([self._cells[(row, column)] for row in row_range])
+                self._select_cells([self._cells[(row, column)] for row in row_range], flip=flip)
 
 
 
-    def _set_anchor(self, cell, col = None, add = False):        
+    def _set_anchor(self, cell, col = None, add = False, flip=False):        
         if not cell and cell != 0:
             self._anchor_cell = None
             return
 
         if type(cell) != Cell:
             cell = self._cells[utils.normalize_cell_notation(self, cell, col)]
+
+        if flip and cell in self._selected_cells:
+            self._deselect_cell(cell)
+            return
 
         print('Setting cell ' + repr(cell) + ' to anchor')
 
@@ -497,13 +509,13 @@ class Spreadsheet(tk.Frame):
             self._select_cell(self._cells[(anchor_row + 1, 0)], anchor=True, exclusive=exclusive)
 
 
-    def _on_column_label_click(self, event, exclusive = True):
+    def _on_column_label_click(self, event, exclusive = True, flip=False):
         column = self._column_labels.index(self.nametowidget(event.widget))
-        self._select_column(column, exclusive = exclusive)
+        self._select_column(column, exclusive = exclusive, flip=flip)
         self._column_y = event.y_root
 
     def _on_column_label_control_click(self, event):
-        self._on_column_label_click(event, exclusive = False)
+        self._on_column_label_click(event, exclusive = False, flip=True)
 
     def _on_column_label_shift_click(self, event, exclusive=True):
         (_, anchor_col) = self._cells_inverse[self._anchor_cell]
@@ -514,9 +526,30 @@ class Spreadsheet(tk.Frame):
         reel_col = self._column_labels.index(self.winfo_containing(event.x_root, self._column_y))
         self._select_range(exclusive=False, keepanchor=True, reel=(-1, reel_col))
 
-    def _select_column(self, column, exclusive = True):
+    def _select_column(self, column, exclusive = True, flip = False):
         print('Selecting column ' + str(column))
-        self._select_range(anchor = (0, column), keepanchor = False, reel = (self.spreadsheet_rows - 1, column), exclusive = exclusive)
+        self._select_range(anchor = (0, column), keepanchor = False, reel = (self.spreadsheet_rows - 1, column), exclusive = exclusive, flip=True)
+
+    def _on_row_label_click(self, event, exclusive = True):
+        row = self._row_labels.index(self.nametowidget(event.widget))
+        self._select_row(row, exclusive = exclusive)
+        self._row_x = event.x_root
+
+    def _on_row_label_control_click(self, event):
+        self._on_row_label_click(event, exclusive = False)
+
+    def _on_row_label_shift_click(self, event, exclusive=True):
+        (anchor_row, _) = self._cells_inverse[self._anchor_cell]
+        event_row = self._row_labels.index(self.nametowidget(event.widget))
+        self._select_range(anchor=(anchor_row, 0), reel=(event_row, -1), keepanchor = True, exclusive = exclusive)
+
+    def _on_row_label_mouse_motion(self, event):
+        reel_row = self._row_labels.index(self.winfo_containing(self._row_x, event.y_root))
+        self._select_range(exclusive=False, keepanchor=True, reel=(reel_row, -1))
+
+    def _select_row(self, row, exclusive = True):
+        print('Selecting row ' + str(row))
+        self._select_range(anchor = (row, 0), keepanchor = False, reel = (row, -1), exclusive = exclusive)
 
     def _on_spreadsheet_backspace(self, event):
         self._erase_selected_cell_contents()
@@ -688,28 +721,6 @@ class Spreadsheet(tk.Frame):
         self._guarantee_widget_focus = None
 
 
-    def _on_row_label_click(self, event, exclusive = True):
-        row = self._row_labels.index(self.nametowidget(event.widget))
-        self._select_row(row, exclusive = exclusive)
-
-    def _on_row_label_control_click(self, event):
-        self._on_row_label_click(event, exclusive = False)
-
-    def _on_row_label_shift_click(self, event, exclusive=True):
-        (anchor_row, _) = self._get_anchor_coords()
-        event_row = self._row_labels.index(self.nametowidget(event.widget))
-        if exclusive:
-            self._deselect_all()
-        for row in utils.closed_range(anchor_row, event_row):
-            self._select_row(row, exclusive = False, anchor=False)
-        self._set_anchor(self._cells[(anchor_row, 0)])
-
-    def _select_row(self, row, exclusive = True, anchor=True):
-        self._select_cells([self._cells[(row, column)] for column in range(self.spreadsheet_columns)], exclusive = exclusive)
-        if anchor:
-            self._set_anchor((row, 0))
-
-
     def _print_determinant(self, event):
         message = None
         try:
@@ -754,11 +765,10 @@ class Spreadsheet(tk.Frame):
         self._guarantee_focus = False
 
     def _start_anchor_entry_cursor(self):
-        print('Go to the anchor')
-        self._anchor_cell.display_value = self.gsv.get()
-        self.gsv.set('')
         if self._anchor_cell:
-            print('Anchor cell is indeed selected')
+            print('Go to the anchor')
+            self._anchor_cell.display_value = self.gsv.get()
+            self.gsv.set('')
             return self._anchor_cell.entry_start_cursor(highlight=False)
 
     def _copy_from_anchor_to_selected(self, entry = None):
