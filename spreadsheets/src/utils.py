@@ -1,4 +1,5 @@
 import re
+import src.expr_evaluator as arithmetic_evaluator
 
 def get_column_letters(n, zero_indexed = True):
     if zero_indexed: 
@@ -50,42 +51,42 @@ def closed_range(a, b):
 
     return range(start, stop + 1)
 
-def normalize_cell_notation(cell, col=None):
-    if type(cell) == int:
-        if cell == -1:
-            cell = self.spreadsheet_rows - 1
-        if col == -1:
-            cell = self.spreadsheet_columns - 1
-        cell = self._cells[(cell, col)]
-    elif type(cell) == tuple:
-        if cell[0] == -1:
-            cell = (self.spreadsheet_rows - 1, cell[1])
-        if cell[1] == -1:
-            cell = (cell[0], self.spreadsheet_columns - 1)
-        cell = self._cells[cell]
+
+def convert_coordinates_from_negative_1(spreadsheet, row, column):
+    if row == -1:
+        row = spreadsheet.spreadsheet_rows - 1
+    if column == -1:
+        column = spreadsheet.spreadsheet_columns - 1
+    return row, column
+
+def normalize_cell_notation(spreadsheet, cell, column=None):
+    row = cell
+
+    if type(cell) == tuple:
+        row, column = cell
     elif type(cell) == str:
-        cell = self._cells[get_cell_coordinates(cell)]
+        row, column = get_cell_coordinates(cell)
 
-    return cell
+    row, column = convert_coordinates_from_negative_1(row, column)
 
-def _get_cell_value(self, cell_index, stringify):
-    cell = self._cells[self._normalize_cell_notation(cell_index)]
+    return row, column
 
-    value =  cell.get()
+def get_cell_value(spreadsheet, cell_index, stringify):
+    value = spreadsheet._cells[normalize_cell_notation(spreadsheet, cell_index)].display_value
 
     if stringify:
         value = "'" + value + "'"
 
     return value
 
-def _cell_convert(self, value, stringify=False):
-    return re.sub(r'\[.*?\]', lambda match: self._get_cell_value(match[0], stringify), value)
+def cell_convert(spreadsheet, value, stringify=False):
+    return re.sub(r'\[.*?\]', lambda match: get_cell_value(spreadsheet, match[0], stringify), value)
 
-def _process_formula(self, formula, number_based = True):
+def process_formula(spreadsheet, formula, number_based = True):
     if formula and formula[0] == '=' and len(formula) > 1:
-        converted_value = self._cell_convert(formula[1:], not number_based)
+        converted_value = cell_convert(spreadsheet, formula[1:], not number_based)
         if number_based:
-            return str(arithmetic_evaluator.evaluate_expression(converted_value))#value[1:]))
+            return str(arithmetic_evaluator.evaluate_expression(converted_value))
         else:
             return eval(converted_value)
     else:

@@ -4,7 +4,6 @@ import re
 from tkinter import messagebox, filedialog
 
 import src.utils as utils
-import src.expr_evaluator as arithmetic_evaluator
 
 from PIL import Image, ImageTk
 
@@ -17,16 +16,42 @@ import csv
 class Cell(tk.Entry):
     def __init__(self, *args, **kw):
         sv = tk.StringVar()
-        
+      
         kw['textvariable'] = sv
         self.cell_index = kw.pop('cell_index')
 
         super().__init__(*args, **kw)
+        
         self.sv = kw['textvariable']
 
         self.bind('<Control-BackSpace>', self._on_spreadsheet_control_backspace)
         self.bind("<Left>", self._on_spreadsheet_typing_left)
         self.bind('<Right>', self._on_spreadsheet_typing_right)
+
+    def exit(self):
+        print('leaving cell!')
+
+        value = self.display_value.strip()
+
+        try:
+            value = utils.process_formula(self, value)
+        except TypeError:
+            value = utils.process_formula(self, value, number_based = False)
+        try:
+            float(value)
+            self.config(justify='right')
+        except ValueError:
+            self.config(justify='left')
+
+        print('state before ' + repr(self.config()['state']))
+
+        self.config(state='disabled', cursor='plus')
+
+        print('state after ' + repr(self.config()['state']))
+
+        self.display_value = value
+
+        return True
 
     def entry_start_cursor(self, highlight=True):
         print('Focus on entry: ' + repr(self))
@@ -102,9 +127,6 @@ class Spreadsheet(tk.Frame):
 
         self._guarantee_widget_focus = None
 
-        # register a command to use for validation
-        vcmd = (self.register(self._on_spreadsheet_cell_exit), '%W', '%P')
-
         im = Image.open(os.path.join(self.program_paths['icons'], 'select_all_cropped.gif')).resize((10, 10), Image.ANTIALIAS)
         ph = ImageTk.PhotoImage(im)
 
@@ -140,7 +162,7 @@ class Spreadsheet(tk.Frame):
         for row in range(self.spreadsheet_rows):
             for column in range(self.spreadsheet_columns):
                 index = (row, column)
-                c = Cell(self, validate="focusout", validatecommand=vcmd, cell_index = utils.get_cell_index(row, column))
+                c = Cell(self, cell_index = utils.get_cell_index(row, column))
                 c.grid(row=row+1, column=column+1, stick="nsew")
                 c.config(justify="left", state='disabled', cursor='plus', highlightthickness = 1, highlightbackground = 'ghost white',
                             disabledbackground='white', highlightcolor = 'goldenrod')
@@ -155,7 +177,7 @@ class Spreadsheet(tk.Frame):
                 c.bind('<Down>', self._on_spreadsheet_down)
                 c.bind('<Up>', self._on_spreadsheet_up)
                 c.bind('<Escape>', self._on_spreadsheet_escape)
-                c.bind('<FocusOut>', self._cell_stop_cursor)
+                c.bind('<FocusOut>', self._on_exit_cell_typing)
                 c.bind('<Control-Key-d>', self._on_spreadsheet_control_d)
                 c.bind('<Control-Key-E>', self._export_to_csv)
 
@@ -169,7 +191,7 @@ class Spreadsheet(tk.Frame):
         self.grid_rowconfigure(rows, weight=1)
 
         self.gsv = tk.StringVar()
-        self.gsv.trace_add('write', lambda idc, idc2, idc3: self._go_to_entry_widget())
+        self.gsv.trace_add('write', lambda idc, idc2, idc3: self._start_anchor_entry_cursor())
         self.god_entry = tk.Entry(self, textvariable = self.gsv)
         self.god_entry.grid(row=1, column=1)
         self.god_entry.lower()
@@ -205,7 +227,6 @@ class Spreadsheet(tk.Frame):
         self._guarantee_focus = False
 
         self.god_entry.focus_set()
-
 
     def _select_all(self, event):
         print('Selecting all cells in the grid!')
@@ -359,7 +380,7 @@ class Spreadsheet(tk.Frame):
             return
 
         if type(cell) != Cell:
-            cell = self._cells[self._normalize_cell_notation(cell, col)]
+            cell = self._cells[utils.normalize_cell_notation(self, cell, col)]
 
         print('Setting cell ' + repr(cell) + ' to anchor')
 
@@ -374,7 +395,7 @@ class Spreadsheet(tk.Frame):
 
     def _set_reel(self, cell, col=None):
         if type(cell) != Cell:
-            cell = self._cells[self._normalize_cell_notation(cell, col)]
+            cell = self._cells[utils.normalize_cell_notation(self, cell, col)]
 
         self._reel_cell, self._prev_reel_cell = cell, self._reel_cell
 
@@ -522,7 +543,7 @@ class Spreadsheet(tk.Frame):
     def _on_spreadsheet_enter_key(self, event):
         self._select_cell(self._anchor_cell, exclusive=True, anchor=True)
         if self._anchor_cell:
-            return self._anchor_cell._entry_start_cursor(highlight=False)
+            return self._anchor_cell.entry_start_cursor()
 
     def _on_spreadsheet_control_enter_key(self, event):
         self._deselect_cell(self._anchor_cell)
@@ -598,30 +619,6 @@ class Spreadsheet(tk.Frame):
     def _print_inverse(self, event):
         pass
 
-    def _get_cell_value(self, cell_index, stringify):
-        cell = self._cells[self._normalize_cell_notation(cell_index)]
-
-        value =  cell.get()
-
-        if stringify:
-            value = "'" + value + "'"
-
-        return value
-
-    def _cell_convert(self, value, stringify=False):
-        return re.sub(r'\[.*?\]', lambda match: self._get_cell_value(match[0], stringify), value)
-
-    def _process_formula(self, formula, number_based = True):
-        if formula and formula[0] == '=' and len(formula) > 1:
-            converted_value = self._cell_convert(formula[1:], not number_based)
-            if number_based:
-                return str(arithmetic_evaluator.evaluate_expression(converted_value))#value[1:]))
-            else:
-                return eval(converted_value)
-        else:
-            return formula
-
-
 
 
     def _normalize_cell_notation(self, cell, col=None):
@@ -666,36 +663,17 @@ class Spreadsheet(tk.Frame):
 
         os.startfile(filename)
 
-    def _on_spreadsheet_cell_exit(self, c, v):
-        print('leaving cell!')
-
-        cell = self.nametowidget(c)
-
-        value = cell.display_value.strip()
-
-        try:
-            value = self._process_formula(value)
-        except TypeError:
-            value = self._process_formula(value, number_based = False)
-        try:
-            float(value)
-            cell.config(justify='right')
-        except ValueError:
-            cell.config(justify='left')
-
-        cell.config(state='disabled', cursor='plus')
-
-        cell.display_value = value
-
-        return True
-
 
     
 
-    def _cell_stop_cursor(self, event=None):
+    def _on_exit_cell_typing(self, event=None):
         print('Focus out!')
         if self._guarantee_widget_focus:
             self.nametowidget(event.widget).focus_set()
+        else:
+            cell = self.nametowidget(event.widget)
+            cell.config(state='disabled', cursor='plus')
+            cell.exit()
 
         self._guarantee_widget_focus = None
 
@@ -767,10 +745,13 @@ class Spreadsheet(tk.Frame):
 
         self._guarantee_focus = False
 
-    def _go_to_entry_widget(self):
+    def _start_anchor_entry_cursor(self):
+        print('Go to the anchor')
         self._anchor_cell.display_value = self.gsv.get()
         self.gsv.set('')
-        return self._entry_start_cursor(self._anchor_cell, highlight=False)
+        if self._anchor_cell:
+            print('Anchor cell is indeed selected')
+            return self._anchor_cell.entry_start_cursor(highlight=False)
 
     def _copy_from_anchor_to_selected(self, entry = None):
         print('Updating all entries!')
