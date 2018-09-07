@@ -67,3 +67,26 @@ def normalize_cell_notation(cell, col=None):
         cell = self._cells[get_cell_coordinates(cell)]
 
     return cell
+
+def _get_cell_value(self, cell_index, stringify):
+    cell = self._cells[self._normalize_cell_notation(cell_index)]
+
+    value =  cell.get()
+
+    if stringify:
+        value = "'" + value + "'"
+
+    return value
+
+def _cell_convert(self, value, stringify=False):
+    return re.sub(r'\[.*?\]', lambda match: self._get_cell_value(match[0], stringify), value)
+
+def _process_formula(self, formula, number_based = True):
+    if formula and formula[0] == '=' and len(formula) > 1:
+        converted_value = self._cell_convert(formula[1:], not number_based)
+        if number_based:
+            return str(arithmetic_evaluator.evaluate_expression(converted_value))#value[1:]))
+        else:
+            return eval(converted_value)
+    else:
+        return formula

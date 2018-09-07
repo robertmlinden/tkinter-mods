@@ -16,9 +16,42 @@ import csv
 
 class Cell(tk.Entry):
     def __init__(self, *args, **kw):
-        tk.Entry.__init__(self, *args, **{key:kw[key] for key in kw if key!='cell_index'})
+        sv = tk.StringVar()
+        
+        kw['textvariable'] = sv
+        self.cell_index = kw.pop('cell_index')
+
+        super().__init__(*args, **kw)
         self.sv = kw['textvariable']
-        self.cell_index = kw['cell_index']
+
+        self.bind('<Control-BackSpace>', self._on_spreadsheet_control_backspace)
+        self.bind("<Left>", self._on_spreadsheet_typing_left)
+        self.bind('<Right>', self._on_spreadsheet_typing_right)
+
+    def entry_start_cursor(self, highlight=True):
+        print('Focus on entry: ' + repr(self))
+
+        self.config(state='normal', cursor='xterm')
+        self.focus_set()
+        if highlight:
+            self.selection_range(0, 'end')
+        self.icursor(tk.END)
+
+        if self.display_value:
+            return 'break'
+
+
+    def _on_spreadsheet_typing_left(self, event):
+        if self.selection_present():
+            self.icursor(self.index(tk.ANCHOR) + 1)
+            
+
+    def _on_spreadsheet_typing_right(self, event = None):
+        if self.selection_present():
+            self.icursor(self.index(tk.ANCHOR) - 1)
+
+    
+
 
     @property
     def display_value(self):
@@ -28,6 +61,17 @@ class Cell(tk.Entry):
     @display_value.setter
     def display_value(self, value):
         self.sv.set(value)
+
+    def _on_spreadsheet_control_backspace(self, event):
+        print('Control-backspace')
+        entry_widget = self.nametowidget(event.widget)
+        self._erase_cell_contents()
+        entry_widget.icursor(0)
+        self.focus_set( )
+        #self._guarantee_widget_focus = entry_widget
+
+    def _erase_cell_contents(self):
+        self.display_value = ''
 
     def __repr__(self):
         return self.cell_index
@@ -96,8 +140,7 @@ class Spreadsheet(tk.Frame):
         for row in range(self.spreadsheet_rows):
             for column in range(self.spreadsheet_columns):
                 index = (row, column)
-                sv = tk.StringVar()
-                c = Cell(self, textvariable = sv, validate="focusout", validatecommand=vcmd, cell_index = utils.get_cell_index(row, column))
+                c = Cell(self, validate="focusout", validatecommand=vcmd, cell_index = utils.get_cell_index(row, column))
                 c.grid(row=row+1, column=column+1, stick="nsew")
                 c.config(justify="left", state='disabled', cursor='plus', highlightthickness = 1, highlightbackground = 'ghost white',
                             disabledbackground='white', highlightcolor = 'goldenrod')
@@ -105,17 +148,14 @@ class Spreadsheet(tk.Frame):
                 c.bind("<Control-Button-1>", self._on_spreadsheet_control_click)
                 c.bind("<Shift-Button-1>", self._on_spreadsheet_shift_click)
                 c.bind("<Control-Shift-Button-1>", self._on_spreadsheet_control_shift_click)
-                c.bind("<Left>", self._on_spreadsheet_typing_left)
-                c.bind('<Right>', self._on_spreadsheet_typing_right)
                 c.bind("<B1-Motion>", self._on_spreadsheet_mouse_motion)
-                c.bind('<Control-BackSpace>', self._on_spreadsheet_control_backspace)
                 c.bind('<Tab>', self._next)
                 c.bind('<Shift-Tab>', self._prev)
                 c.bind('<Return>', self._on_spreadsheet_down)
                 c.bind('<Down>', self._on_spreadsheet_down)
                 c.bind('<Up>', self._on_spreadsheet_up)
                 c.bind('<Escape>', self._on_spreadsheet_escape)
-                c.bind('<FocusOut>', self._on_entry_focus_out)
+                c.bind('<FocusOut>', self._cell_stop_cursor)
                 c.bind('<Control-Key-d>', self._on_spreadsheet_control_d)
                 c.bind('<Control-Key-E>', self._export_to_csv)
 
@@ -227,6 +267,15 @@ class Spreadsheet(tk.Frame):
             pass
 
 
+    def _restore_borders(self, new, method='normal'):
+        print('restore borders')
+        hlbg = 'darkgreen' if method == 'selected' else 'ghost white'
+
+        if type(new) != list:
+            new = [new]
+        for old in self._selected_cells:
+            if old not in new:
+                old.config(highlightbackground = hlbg)
 
     def _select_range(self, keepanchor = True, exclusive = False, flip=False, anchor = None, reel = None):
         print('Selecting ' + ('exclusive' if exclusive else '') +  ' range: ', end='')
@@ -337,7 +386,7 @@ class Spreadsheet(tk.Frame):
 
         if not self.focus_get() == event.widget:
             if [entry_widget] == self._selected_cells:
-                return self._entry_focus(entry_widget)
+                return entry_widget.entry_start_cursor()
             else:
                 self._select_cell(entry_widget, anchor=True, exclusive=True)
                 self.god_entry.focus_set()
@@ -451,126 +500,6 @@ class Spreadsheet(tk.Frame):
         print('Selecting column ' + str(column))
         self._select_range(anchor = (0, column), keepanchor = False, reel = (self.spreadsheet_rows - 1, column), exclusive = exclusive)
 
-
-    def _get_cell_value(self, cell_index, stringify):
-        cell = self._cells[self._normalize_cell_notation(cell_index)]
-
-        value =  cell.get()
-
-        if stringify:
-            value = "'" + value + "'"
-
-        return value
-
-    def _cell_convert(self, value, stringify=False):
-        return re.sub(r'\[.*?\]', lambda match: self._get_cell_value(match[0], stringify), value)
-
-    def _process_formula(self, formula, number_based = True):
-        if formula and formula[0] == '=' and len(formula) > 1:
-            converted_value = self._cell_convert(formula[1:], not number_based)
-            if number_based:
-                return str(arithmetic_evaluator.evaluate_expression(converted_value))#value[1:]))
-            else:
-                return eval(converted_value)
-        else:
-            return formula
-
-    def _on_spreadsheet_cell_exit(self, c, v):
-        print('leaving cell!')
-
-        cell = self.nametowidget(c)
-
-        value = cell.display_value.strip()
-
-        try:
-            value = self._process_formula(value)
-        except TypeError:
-            value = self._process_formula(value, number_based = False)
-        try:
-            float(value)
-            cell.config(justify='right')
-        except ValueError:
-            cell.config(justify='left')
-
-        cell.config(state='disabled', cursor='plus')
-
-        cell.display_value = value
-
-        return True
-
-    def _restore_borders(self, new, method='normal'):
-        print('restore borders')
-        hlbg = 'darkgreen' if method == 'selected' else 'ghost white'
-
-        if type(new) != list:
-            new = [new]
-        for old in self._selected_cells:
-            if old not in new:
-                old.config(highlightbackground = hlbg)
-
-
-
-    def _normalize_cell_notation(self, cell, col=None):
-        if type(cell) == int:
-            if cell == -1:
-                row = self.spreadsheet_rows - 1
-            else:
-                row = cell
-            if col == -1:
-                col = self.spreadsheet_columns - 1
-            cell_coordinates = (row, col)
-        elif type(cell) == tuple:
-            if cell[0] == -1:
-                row = self.spreadsheet_rows - 1
-            else:
-                row = cell[0]
-            if cell[1] == -1:
-                col = self.spreadsheet_columns - 1
-            else:
-                col = cell[1]
-            cell_coordinates = (row, col)
-        elif type(cell) == str:
-            cell_coordinates = utils.get_cell_coordinates(cell)
-
-        return cell_coordinates
-
-
-    def _export_to_csv(self, event=None):
-        values = self.get()
-
-        filename = filedialog.asksaveasfilename(title='Export to CSV', initialdir=self.program_paths['index'], filetypes=[('Comma Separated Values', '*.csv')])
-        
-        if not filename:
-            return
-
-        if filename[-4:].lower() != '.csv':
-            filename += '.csv'
-
-        with open(filename, "w+", newline='') as f:
-            writer = csv.writer(f, skipinitialspace=True)
-            writer.writerows(values) 
-
-        os.startfile(filename)
-
-
-    def _entry_focus(self, entry_widget, highlight=True):
-        print('Focus on entry: ' + str(entry_widget))
-        if not entry_widget:
-            return
-
-        entry_widget.config(state='normal', cursor='xterm')
-        entry_widget.focus_set()
-        if highlight:
-            entry_widget.selection_range(0, 'end')
-        entry_widget.icursor(tk.END)
-
-        if entry_widget.get():
-            return 'break'
-
-
-
-
-
     def _on_spreadsheet_backspace(self, event):
         self._erase_selected_cell_contents()
 
@@ -578,98 +507,28 @@ class Spreadsheet(tk.Frame):
         self._erase_selected_cell_contents()
 
     def _erase_selected_cell_contents(self):
-        for e in self._selected_cells:
-            self._erase_cell_contents(e)
-
-    def _erase_cell_contents(self, entry_widget):
-        entry_widget.display_value = ''
+        for cell in self._selected_cells:
+            cell._erase_cell_contents()
 
     def _on_spreadsheet_control_d(self, event):
         self._copy_from_anchor_to_selected(self._anchor_cell)
 
-    def _on_spreadsheet_typing_left(self, event):
-        entry_widget = self.nametowidget(event.widget)
-        if entry_widget.selection_present():
-            entry_widget.icursor(entry_widget.index(tk.ANCHOR) + 1)
-            
+    def _on_spreadsheet_tab(self, event = None):
+        self._next()
 
-    def _on_spreadsheet_typing_right(self, event = None):
-        entry_widget = self.nametowidget(event.widget)
-        if entry_widget.selection_present():
-            entry_widget.icursor(entry_widget.index(tk.ANCHOR) - 1)
+    def _on_spreadsheet_shift_tab(self, event=None):
+        self._prev()
 
+    def _on_spreadsheet_enter_key(self, event):
+        self._select_cell(self._anchor_cell, exclusive=True, anchor=True)
+        if self._anchor_cell:
+            return self._anchor_cell._entry_start_cursor(highlight=False)
 
-    def _on_spreadsheet_control_backspace(self, event):
-        if self.focus_get() == event.widget:
-            entry_widget = self.nametowidget(event.widget)
-            self._erase_cell_contents(entry_widget)
-            entry_widget.icursor(0)
-            self._guarantee_widget_focus = entry_widget
-
-    def _on_entry_focus_out(self, event=None):
-        print('Focus out!')
-        if self._guarantee_widget_focus:
-            self.nametowidget(event.widget).focus_set()
-
-        self._guarantee_widget_focus = None
-
-    
-
-
-    def _on_row_label_click(self, event, exclusive = True):
-        row = self._row_labels.index(self.nametowidget(event.widget))
-        self._select_row(row, exclusive = exclusive)
-
-    def _on_row_label_control_click(self, event):
-        self._on_row_label_click(event, exclusive = False)
-
-    def _on_row_label_shift_click(self, event, exclusive=True):
-        (anchor_row, _) = self._get_anchor_coords()
-        event_row = self._row_labels.index(self.nametowidget(event.widget))
-        if exclusive:
-            self._deselect_all()
-        for row in utils.closed_range(anchor_row, event_row):
-            self._select_row(row, exclusive = False, anchor=False)
-        self._set_anchor(self._cells[(anchor_row, 0)])
-
-    def _select_row(self, row, exclusive = True, anchor=True):
-        self._select_cells([self._cells[(row, column)] for column in range(self.spreadsheet_columns)], exclusive = exclusive)
-        if anchor:
-            self._set_anchor((row, 0))
-
+    def _on_spreadsheet_control_enter_key(self, event):
+        self._deselect_cell(self._anchor_cell)
 
     def _on_spreadsheet_escape(self, event):
         self._select_cell(self._anchor_cell, exclusive=True, anchor=True)
-
-    def _print_determinant(self, event):
-        message = None
-        try:
-            determinant = self._calculate_determinant()
-            message = ('Determinant Calculation', str(determinant))
-        except (TypeError, ValueError):
-            message = ('Try again', 'Not all entries are integers')
-        
-        messagebox.showinfo(*message)
-
-    # Assume 3x3 from (0, 0)
-    def _calculate_determinant(self, event):
-        a00 = float(self._cells[(0, 0)].get().strip())
-        a01 = float(self._cells[(0, 1)].get().strip())
-        a02 = float(self._cells[(0, 2)].get().strip())
-        a10 = float(self._cells[(1, 0)].get().strip())
-        a11 = float(self._cells[(1, 1)].get().strip())
-        a12 = float(self._cells[(1, 2)].get().strip())
-        a20 = float(self._cells[(2, 0)].get().strip())
-        a21 = float(self._cells[(2, 1)].get().strip())
-        a22 = float(self._cells[(2, 2)].get().strip())
-        
-        d1 = a11 * a22 - a21 * a12
-        d2 = a10 * a22 - a20 * a22
-        d3 = a10 * a21 - a20 * a11
-        d = a00 * d1 - a01 * d2 + a02 * d3
-
-        return d
-        
 
     def _convert_to_inverse(self):
         a00 = self._cells[(0, 0)]
@@ -739,16 +598,168 @@ class Spreadsheet(tk.Frame):
     def _print_inverse(self, event):
         pass
 
+    def _get_cell_value(self, cell_index, stringify):
+        cell = self._cells[self._normalize_cell_notation(cell_index)]
+
+        value =  cell.get()
+
+        if stringify:
+            value = "'" + value + "'"
+
+        return value
+
+    def _cell_convert(self, value, stringify=False):
+        return re.sub(r'\[.*?\]', lambda match: self._get_cell_value(match[0], stringify), value)
+
+    def _process_formula(self, formula, number_based = True):
+        if formula and formula[0] == '=' and len(formula) > 1:
+            converted_value = self._cell_convert(formula[1:], not number_based)
+            if number_based:
+                return str(arithmetic_evaluator.evaluate_expression(converted_value))#value[1:]))
+            else:
+                return eval(converted_value)
+        else:
+            return formula
+
+
+
+
+    def _normalize_cell_notation(self, cell, col=None):
+        if type(cell) == int:
+            if cell == -1:
+                row = self.spreadsheet_rows - 1
+            else:
+                row = cell
+            if col == -1:
+                col = self.spreadsheet_columns - 1
+            cell_coordinates = (row, col)
+        elif type(cell) == tuple:
+            if cell[0] == -1:
+                row = self.spreadsheet_rows - 1
+            else:
+                row = cell[0]
+            if cell[1] == -1:
+                col = self.spreadsheet_columns - 1
+            else:
+                col = cell[1]
+            cell_coordinates = (row, col)
+        elif type(cell) == str:
+            cell_coordinates = utils.get_cell_coordinates(cell)
+
+        return cell_coordinates
+
+
+    def _export_to_csv(self, event=None):
+        values = self.get()
+
+        filename = filedialog.asksaveasfilename(title='Export to CSV', initialdir=self.program_paths['index'], filetypes=[('Comma Separated Values', '*.csv')])
+        
+        if not filename:
+            return
+
+        if filename[-4:].lower() != '.csv':
+            filename += '.csv'
+
+        with open(filename, "w+", newline='') as f:
+            writer = csv.writer(f, skipinitialspace=True)
+            writer.writerows(values) 
+
+        os.startfile(filename)
+
+    def _on_spreadsheet_cell_exit(self, c, v):
+        print('leaving cell!')
+
+        cell = self.nametowidget(c)
+
+        value = cell.display_value.strip()
+
+        try:
+            value = self._process_formula(value)
+        except TypeError:
+            value = self._process_formula(value, number_based = False)
+        try:
+            float(value)
+            cell.config(justify='right')
+        except ValueError:
+            cell.config(justify='left')
+
+        cell.config(state='disabled', cursor='plus')
+
+        cell.display_value = value
+
+        return True
+
+
+    
+
+    def _cell_stop_cursor(self, event=None):
+        print('Focus out!')
+        if self._guarantee_widget_focus:
+            self.nametowidget(event.widget).focus_set()
+
+        self._guarantee_widget_focus = None
+
+    
+
+
+    def _on_row_label_click(self, event, exclusive = True):
+        row = self._row_labels.index(self.nametowidget(event.widget))
+        self._select_row(row, exclusive = exclusive)
+
+    def _on_row_label_control_click(self, event):
+        self._on_row_label_click(event, exclusive = False)
+
+    def _on_row_label_shift_click(self, event, exclusive=True):
+        (anchor_row, _) = self._get_anchor_coords()
+        event_row = self._row_labels.index(self.nametowidget(event.widget))
+        if exclusive:
+            self._deselect_all()
+        for row in utils.closed_range(anchor_row, event_row):
+            self._select_row(row, exclusive = False, anchor=False)
+        self._set_anchor(self._cells[(anchor_row, 0)])
+
+    def _select_row(self, row, exclusive = True, anchor=True):
+        self._select_cells([self._cells[(row, column)] for column in range(self.spreadsheet_columns)], exclusive = exclusive)
+        if anchor:
+            self._set_anchor((row, 0))
+
+
+    def _print_determinant(self, event):
+        message = None
+        try:
+            determinant = self._calculate_determinant()
+            message = ('Determinant Calculation', str(determinant))
+        except (TypeError, ValueError):
+            message = ('Try again', 'Not all entries are integers')
+        
+        messagebox.showinfo(*message)
+
+    # Assume 3x3 from (0, 0)
+    def _calculate_determinant(self, event):
+        a00 = float(self._cells[(0, 0)].get().strip())
+        a01 = float(self._cells[(0, 1)].get().strip())
+        a02 = float(self._cells[(0, 2)].get().strip())
+        a10 = float(self._cells[(1, 0)].get().strip())
+        a11 = float(self._cells[(1, 1)].get().strip())
+        a12 = float(self._cells[(1, 2)].get().strip())
+        a20 = float(self._cells[(2, 0)].get().strip())
+        a21 = float(self._cells[(2, 1)].get().strip())
+        a22 = float(self._cells[(2, 2)].get().strip())
+        
+        d1 = a11 * a22 - a21 * a12
+        d2 = a10 * a22 - a20 * a22
+        d3 = a10 * a21 - a20 * a11
+        d = a00 * d1 - a01 * d2 + a02 * d3
+
+        return d
+        
+
+
 
     def _on_spreadsheet_typing_escape(self, event):
         # TBD, keep old entry somewhere
         pass
 
-    def _on_spreadsheet_enter_key(self, event):
-        return self._entry_focus(self._anchor_cell, highlight=False)
-
-    def _on_spreadsheet_control_enter_key(self, event):
-        self._deselect_cell(self._anchor_cell)
 
     def _on_god_entry_focus_out(self, event):
         if self._guarantee_focus:
@@ -756,13 +767,10 @@ class Spreadsheet(tk.Frame):
 
         self._guarantee_focus = False
 
-    def _get_anchor_sv(self):
-        return self._cells[self._cells_inverse[self._anchor_cell]].sv
-
     def _go_to_entry_widget(self):
         self._anchor_cell.display_value = self.gsv.get()
         self.gsv.set('')
-        return self._entry_focus(self._anchor_cell, highlight=False)
+        return self._entry_start_cursor(self._anchor_cell, highlight=False)
 
     def _copy_from_anchor_to_selected(self, entry = None):
         print('Updating all entries!')
@@ -772,12 +780,6 @@ class Spreadsheet(tk.Frame):
                     continue
                 entry_widget.display_value = self._anchor_cell.display_value
                 entry_widget.update()
-
-    def _on_spreadsheet_tab(self, event = None):
-        self._next()
-
-    def _on_spreadsheet_shift_tab(self, event=None):
-        self._prev()
 
     def _prev(self, event = None):
         if len(self._selected_cells) == 1:
@@ -825,14 +827,3 @@ class Spreadsheet(tk.Frame):
                 current_row.append(self._cells[index].get())
             result.append(current_row)
         return result
-
-class Example(tk.Frame):
-    def __init__(self, parent, program_paths):
-        tk.Frame.__init__(self, parent)
-        self._spreadsheet = Spreadsheet(program_paths, self, 10, 10)
-        self.submit = tk.Button(self, text="Submit", command=self.on_submit)
-        self._spreadsheet.pack(side="top", fill="both", expand=True)
-        self.submit.pack(side="bottom")
-
-    def on_submit(self):
-        print_(self.spreadsheet.get())

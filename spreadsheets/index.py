@@ -1,6 +1,17 @@
-from src.tkspreadsheet import Example
+from src.tkspreadsheet import Spreadsheet
 import tkinter as tk
 import os
+
+class Example(tk.Frame):
+    def __init__(self, parent, program_paths):
+        tk.Frame.__init__(self, parent)
+        self._spreadsheet = Spreadsheet(program_paths, self, 10, 10)
+        self.submit = tk.Button(self, text="Submit", command=self.on_submit)
+        self._spreadsheet.pack(side="top", fill="both", expand=True)
+        self.submit.pack(side="bottom")
+
+    def on_submit(self):
+        print_(self.spreadsheet.get())
 
 def main():
 	root = tk.Tk()
@@ -14,14 +25,3 @@ def main():
 
 if __name__ == '__main__':
 	main()
-
-class Example(tk.Frame):
-    def __init__(self, parent, program_paths):
-        tk.Frame.__init__(self, parent)
-        self._spreadsheet = Spreadsheet(program_paths, self, 10, 10)
-        self.submit = tk.Button(self, text="Submit", command=self.on_submit)
-        self._spreadsheet.pack(side="top", fill="both", expand=True)
-        self.submit.pack(side="bottom")
-
-    def on_submit(self):
-        print_(self.spreadsheet.get())
