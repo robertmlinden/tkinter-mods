@@ -67,27 +67,6 @@ def normalize_cell_notation(spreadsheet, cell, column=None):
     elif type(cell) == str:
         row, column = get_cell_coordinates(cell)
 
-    row, column = convert_coordinates_from_negative_1(row, column)
+    row, column = convert_coordinates_from_negative_1(spreadsheet, row, column)
 
     return row, column
-
-def get_cell_value(spreadsheet, cell_index, stringify):
-    value = spreadsheet._cells[normalize_cell_notation(spreadsheet, cell_index)].display_value
-
-    if stringify:
-        value = "'" + value + "'"
-
-    return value
-
-def cell_convert(spreadsheet, value, stringify=False):
-    return re.sub(r'\[.*?\]', lambda match: get_cell_value(spreadsheet, match[0], stringify), value)
-
-def process_formula(spreadsheet, formula, number_based = True):
-    if formula and formula[0] == '=' and len(formula) > 1:
-        converted_value = cell_convert(spreadsheet, formula[1:], not number_based)
-        if number_based:
-            return str(arithmetic_evaluator.evaluate_expression(converted_value))
-        else:
-            return eval(converted_value)
-    else:
-        return formula

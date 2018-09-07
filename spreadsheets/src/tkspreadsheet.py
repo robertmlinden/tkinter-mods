@@ -4,6 +4,8 @@ import re
 from tkinter import messagebox, filedialog
 
 import src.utils as utils
+import src.expr_evaluator as arithmetic_evaluator
+
 
 from PIL import Image, ImageTk
 
@@ -28,31 +30,6 @@ class Cell(tk.Entry):
         self.bind("<Left>", self._on_spreadsheet_typing_left)
         self.bind('<Right>', self._on_spreadsheet_typing_right)
 
-    def exit(self):
-        print('leaving cell!')
-
-        value = self.display_value.strip()
-
-        try:
-            value = utils.process_formula(self, value)
-        except TypeError:
-            value = utils.process_formula(self, value, number_based = False)
-        try:
-            float(value)
-            self.config(justify='right')
-        except ValueError:
-            self.config(justify='left')
-
-        print('state before ' + repr(self.config()['state']))
-
-        self.config(state='disabled', cursor='plus')
-
-        print('state after ' + repr(self.config()['state']))
-
-        self.display_value = value
-
-        return True
-
     def entry_start_cursor(self, highlight=True):
         print('Focus on entry: ' + repr(self))
 
@@ -65,7 +42,6 @@ class Cell(tk.Entry):
         if self.display_value:
             return 'break'
 
-
     def _on_spreadsheet_typing_left(self, event):
         if self.selection_present():
             self.icursor(self.index(tk.ANCHOR) + 1)
@@ -74,9 +50,6 @@ class Cell(tk.Entry):
     def _on_spreadsheet_typing_right(self, event = None):
         if self.selection_present():
             self.icursor(self.index(tk.ANCHOR) - 1)
-
-    
-
 
     @property
     def display_value(self):
@@ -97,6 +70,13 @@ class Cell(tk.Entry):
 
     def _erase_cell_contents(self):
         self.display_value = ''
+
+    def align_based_on_entry_type(self):
+        try:
+            float(self.display_value)
+            self.config(justify='right')
+        except ValueError:
+            self.config(justify='left')
 
     def __repr__(self):
         return self.cell_index
@@ -227,6 +207,23 @@ class Spreadsheet(tk.Frame):
         self._guarantee_focus = False
 
         self.god_entry.focus_set()
+
+    def _get_formatted_value(self, match, stringify=False):
+        cell = self._cells[utils.normalize_cell_notation(self, match)]
+        return "'" + cell.display_value + "'" if stringify else cell.display_value
+
+    def _cell_convert(self, value, stringify=False):
+        return re.sub(r'\[.*?\]', lambda match: self._get_formatted_value(match[0], stringify), value)
+
+    def _process_formula(self, formula, number_based = True):
+        if formula and formula[0] == '=' and len(formula) > 1:
+            converted_value = self._cell_convert(formula[1:], not number_based)
+            if number_based:
+                return str(arithmetic_evaluator.evaluate_expression(converted_value))
+            else:
+                return eval(converted_value)
+        else:
+            return formula
 
     def _select_all(self, event):
         print('Selecting all cells in the grid!')
@@ -663,21 +660,32 @@ class Spreadsheet(tk.Frame):
 
         os.startfile(filename)
 
-
-    
-
     def _on_exit_cell_typing(self, event=None):
-        print('Focus out!')
         if self._guarantee_widget_focus:
+            print("Not leaving the cell quite yet!")
             self.nametowidget(event.widget).focus_set()
         else:
+            print('leaving cell!')
+
             cell = self.nametowidget(event.widget)
+
+            value = cell.display_value.strip()
+
+            try:
+                value = self._process_formula(value)
+            except TypeError:
+                value = self._process_formula(value, number_based = False)
+
+            cell.align_based_on_entry_type()
+
             cell.config(state='disabled', cursor='plus')
-            cell.exit()
+
+            cell.display_value = value
+
+            return True
+            
 
         self._guarantee_widget_focus = None
-
-    
 
 
     def _on_row_label_click(self, event, exclusive = True):
