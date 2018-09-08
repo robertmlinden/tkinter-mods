@@ -7,9 +7,25 @@ Fix errors for arrow, control arrow, shift error when no anchor
 
 
 
+PLAN:
+Selecting:
+First color is red
+Then ...
+....
+
+
+Need keybind to continue on to next color!
+
+Keep track of selection background
+
+
+
+
 Features:
 
 Formula functions
+
+Display Value vs. Formula Value for each cell!
 
 Plotting
 
@@ -21,7 +37,9 @@ with no anchor:
 	Control right 
 
 Export to excel
-make borders nicer is.. meka borders internal disap highl bacg
+make borders nicer is.. make borders internal disap highl bacg
+
+
 
 
 

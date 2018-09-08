@@ -1,11 +1,12 @@
 import tkinter as tk
 import re
 
+import importlib
+
 from tkinter import messagebox, filedialog
 
 import src.utils as utils
 import src.expr_evaluator as arithmetic_evaluator
-
 
 from PIL import Image, ImageTk
 
@@ -209,6 +210,8 @@ class Spreadsheet(tk.Frame):
         self.god_entry.bind('<Control-Key-E>', self._export_to_csv)
         self.god_entry.bind('<Control-Key-p>', self._dot_plot)
         self.god_entry.bind('<Escape>', self._on_spreadsheet_escape)
+        self.god_entry.bind('<Control-Key-m>', self._create_macro)
+        self.god_entry.bind('<Control-Key-l>', self._import_macro)
 
         self._guarantee_focus = False
 
@@ -698,7 +701,7 @@ class Spreadsheet(tk.Frame):
         if not filename:
             return
 
-        if filename[-4:].lower() != '.csv':
+        if filename[-4:] != '.csv':
             filename += '.csv'
 
         with open(filename, "w+", newline='') as f:
@@ -826,8 +829,52 @@ class Spreadsheet(tk.Frame):
 
     def _get_reel_coords(self):
         reel_widget = self.nametowidget(self._reel_cell)
-        return self._cells_inverse[reel_widget]        
+        return self._cells_inverse[reel_widget]
 
+    def _create_macro(self, event):
+        filename = filedialog.asksaveasfilename(title='Create Macro File', initialdir=self.program_paths['index'], filetypes=[('Python File', '*.py')])
+
+        if not filename:
+            return
+
+        if filename[-3:] != '.py':
+            filename += '.py'
+
+        with open(filename, "w+") as python:
+            python.write('from pysheets import *\n\n')
+            # Comment out examples of ways to use the API
+
+        os.startfile(filename)
+
+    def _run_macro(self, event):
+        self.active_macro_import.run(self)
+
+    def _import_macro(self, event):
+        active_macro_fullpath = filedialog.askopenfilename(title='Create Macro File', initialdir=self.program_paths['index'], filetypes=[('Python File', '*.py')])
+
+        self.active_macro_name = os.path.split(active_macro_fullpath)[-1]
+
+        print(active_macro_fullpath)
+
+        macro_import_init_file = os.path.join(self.program_paths['index'], 'macros', '__init__.py')
+
+        if not os.path.exists('macros'):
+            os.makedirs('macros')
+
+        thingy = 'macros.' + self.active_macro_name[:-3]
+
+        with open(macro_import_init_file, "a") as init_file:
+            print('got here')
+            init_file.write('\nimport ' + thingy + '\n')
+
+        self.active_macro_import = importlib.import_module(thingy)
+
+        # Detect changes to file
+        importlib.reload(self.active_macro_import)
+
+
+        self.god_entry.bind('<Control-Key-R>', self._run_macro)
+        self.god_entry.bind('<Control-Key-r>', self._run_macro)
 
 
     def get(self):
