@@ -60,6 +60,10 @@ class Cell(tk.Entry):
     def display_value(self, value):
         self.sv.set(value)
 
+    @property
+    def coordinates(self):
+        return utils.normalize_cell_notation(self.cell_index)
+
     def _on_spreadsheet_control_backspace(self, event):
         print('Control-backspace')
         entry_widget = self.nametowidget(event.widget)
@@ -211,7 +215,7 @@ class Spreadsheet(tk.Frame):
         self.containing_frame.focus_set()
 
     def _dot_plot(self, event):
-        pass
+        []
 
     def _get_formatted_value(self, match, stringify=False):
         cell = self._cells[utils.normalize_cell_notation(self, match)]
@@ -237,8 +241,7 @@ class Spreadsheet(tk.Frame):
     def _select_cells(self, entry_widgets, exclusive=False, flip=False):
         print('Selecting cells ' + str([cell.cell_index for cell in entry_widgets]))
         if exclusive:
-            self._restore_borders(entry_widgets)
-            self._selected_cells = []
+            self._deselect_all()
         
         [self._select_cell(cell, exclusive=False, flip=flip) for cell in entry_widgets]
 
@@ -515,12 +518,23 @@ class Spreadsheet(tk.Frame):
         self._column_y = event.y_root
 
     def _on_column_label_control_click(self, event):
-        self._on_column_label_click(event, exclusive = False, flip=True)
+        column = self._column_labels.index(self.nametowidget(event.widget))
+        column_cells = [self._cells[(row, column)] for row in range(self.spreadsheet_rows)]
+        num_cells_selected = sum([column_cell in self._selected_cells for column_cell in column_cells])
+
+        if num_cells_selected > self.spreadsheet_rows / 2:
+            self._deselect_cells(column_cells)
+        else:
+            self._select_cells(column_cells)
+            self._set_anchor(column_cells[0])
+
+        self._column_y = event.y_root
 
     def _on_column_label_shift_click(self, event, exclusive=True):
         (_, anchor_col) = self._cells_inverse[self._anchor_cell]
         event_col = self._column_labels.index(self.nametowidget(event.widget))
         self._select_range(anchor=(0, anchor_col), reel=(self.spreadsheet_rows - 1, event_col), keepanchor = True, exclusive = exclusive)
+        self._column_y = event.y_root
 
     def _on_column_label_mouse_motion(self, event):
         reel_col = self._column_labels.index(self.winfo_containing(event.x_root, self._column_y))

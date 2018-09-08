@@ -1,37 +1,32 @@
 Bugs:
 
-Restore anchor when anchor is deselected - but restore to where??
-Set reel correctly when cell is deselected
-Some mutual recusion messing it all up
-Control clicking still flipping out
-Checko for shoft arrow when key is god
-Fix errors for arrow, control arrow, shift error when no ahcnor
-When traversing a diagonal, the cells with highest row and highest col don't work! If diagonal, count diagonal!
-Fix shift clicks
-Fix cell still in focus error for failed formulas
+When deselecting a row, the anchor is still there
 
-
-
-Refactors 
-
-Refactor restore cells
+Fix errors for arrow, control arrow, shift error when no anchor
 
 
 
 
 Features:
 
-formulas
-allow square selection
+Formula functions
+
+Plotting
+
+allow square, linear selection
+
+
 with no anchor:
 	Control-enter go to middle
 	Control right 
 
 Export to excel
 make borders nicer is.. meka borders internal disap highl bacg
-allow cell referencing
 
+
+
+
+Future:
+Build an API for creating macros: referencing cells (getting/setting), creating selections, etc.
+Talk to users of Excel to determine what needs to be improved
 create menus
-Allow drag across headers (use winfo)
-
-non-greedy replacing
