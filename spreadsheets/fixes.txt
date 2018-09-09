@@ -4,6 +4,8 @@ When deselecting a row, the anchor is still there
 
 Fix errors for arrow, control arrow, shift error when no anchor
 
+Variable trace in Cell entry
+
 
 
 
@@ -13,12 +15,16 @@ First color is red
 Then ...
 ....
 
+wrap api
+
 
 Need keybind to continue on to next color!
 
 Keep track of selection background
 
 When Ctrl+d formula, formula appears, then fades out in animation to value
+
+Selecting nodes when typing out hte formula (Ctrl+Shift+Up)
 
 
 

@@ -53,9 +53,9 @@ def closed_range(a, b):
 
 def convert_coordinates_from_negative_1(spreadsheet, row, column):
     if row == -1:
-        row = spreadsheet.spreadsheet_rows - 1
+        row = spreadsheet.rows - 1
     if column == -1:
-        column = spreadsheet.spreadsheet_columns - 1
+        column = spreadsheet.columns - 1
     return row, column
 
 def normalize_cell_notation(spreadsheet, cell, column=None):
