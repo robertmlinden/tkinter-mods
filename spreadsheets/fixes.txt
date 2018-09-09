@@ -18,6 +18,8 @@ Need keybind to continue on to next color!
 
 Keep track of selection background
 
+When Ctrl+d formula, formula appears, then fades out in animation to value
+
 
 
 

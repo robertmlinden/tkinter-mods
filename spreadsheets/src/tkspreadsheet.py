@@ -31,7 +31,20 @@ class Cell(tk.Entry):
         self.bind("<Left>", self._on_spreadsheet_typing_left)
         self.bind('<Right>', self._on_spreadsheet_typing_right)
 
-        self.formula_value = ''
+        self._formula_value = ''
+        self._computed_value = ''
+
+        self._mode = 'formula'
+
+    def _on_spreadsheet_control_backspace(self, event):
+        print('Control-backspace')
+        entry_widget = self.nametowidget(event.widget)
+        self._erase_cell_contents()
+        entry_widget.icursor(0)
+        self.focus_set()
+
+    def _erase_cell_contents(self):
+        self._formula_value = ''
 
     def _entry_start_cursor(self, highlight=True):
         print('Focus on entry: ' + repr(self))
@@ -42,7 +55,7 @@ class Cell(tk.Entry):
             self.selection_range(0, 'end')
         self.icursor(tk.END)
 
-        if self.display_value:
+        if self.computed_value:
             return 'break'
 
     def _on_spreadsheet_typing_left(self, event):
@@ -55,49 +68,54 @@ class Cell(tk.Entry):
             self.icursor(self.index(tk.ANCHOR) - 1)
 
     @property
-    def display_value(self):
-        "I am the 'x' property."
-        return self.sv.get()
+    def formula_value(self):
+        return self._formula_value
+    
 
-    @display_value.setter
-    def display_value(self, value):
-        self.sv.set(value)
+    @formula_value.setter
+    def formula_value(self, value):
+        self._formula_value = value
+        self._update_display()
+
 
     @property
-    def formula(self):
-        return self.formula_value
+    def computed_value(self):
+        return self._computed_value
+    
 
-    @formula.setter
-    def formula(self, value):
-        self.formula_value = value
+    @computed_value.setter
+    def computed_value(self, value):
+        self._computed_value = value
+        self._update_display()
 
+    
     @property
     def coordinates(self):
         return utils.normalize_cell_notation(self.cell_index)
 
-    def _on_spreadsheet_control_backspace(self, event):
-        print('Control-backspace')
-        entry_widget = self.nametowidget(event.widget)
-        self._erase_cell_contents()
-        entry_widget.icursor(0)
-        self.focus_set( )
-        #self._guarantee_widget_focus = entry_widget
-
-    def _erase_cell_contents(self):
-        self.display_value = ''
-
     def _set_background(self, color_string):
         self.config(background=color_string, disabledbackground=color_string)
+
+    def _update_display(self):
+        if self._mode == 'formula':
+            self.sv.set(self._formula_value)
+        else:
+            self.sv.set(self._computed_value)
+
+    def mode(self, _mode):
+        self._mode = _mode
+        self._update_display()
+
+    def _update_formula_value(self):
+        self._formula_value = self.sv.get()
 
     def _align_based_on_entry_type(self):
         print('aligning!')
         try:
-            float(self.display_value)
+            float(self.computed_value)
             self.config(justify='right')
-            #self._set_background('#d8d6ab')
         except ValueError:
             self.config(justify='left')
-            #self._set_background('white')
 
     def __repr__(self):
         return self.cell_index
@@ -178,6 +196,7 @@ class Spreadsheet(tk.Frame):
                 c.bind('<Down>', self._on_spreadsheet_down)
                 c.bind('<Up>', self._on_spreadsheet_up)
                 c.bind('<Escape>', self._on_spreadsheet_escape)
+                c.bind('<FocusIn>', self._on_cell_begin_typing)
                 c.bind('<FocusOut>', self._on_exit_cell_typing)
                 c.bind('<Control-Key-d>', self._on_spreadsheet_control_d)
                 c.bind('<Control-Key-E>', self._export_to_csv)
@@ -221,7 +240,6 @@ class Spreadsheet(tk.Frame):
         self.god_entry.bind('<Control-Key-a>', self._select_all)
         self.god_entry.bind('<Control-Key-D>', self._print_determinant)
         self.god_entry.bind('<Control-Key-I>', self._convert_to_inverse)
-        self.god_entry.bind('<Control-Key-i>', self._print_inverse)
         self.god_entry.bind('<Control-Key-E>', self._export_to_csv)
         self.god_entry.bind('<Control-Key-p>', self._dot_plot)
         self.god_entry.bind('<Escape>', self._on_spreadsheet_escape)
@@ -232,12 +250,35 @@ class Spreadsheet(tk.Frame):
 
         self.containing_frame.focus_set()
 
+    def set_formula(self, formula, *cell_refs):
+        cells = []
+        row = None
+        for cell in cell_refs:
+            if row:
+                column = cell
+                cells.append(self.cells[utils.normalize_cell_notation(None, row, column)])
+                row = None
+            elif type(cell) == Cell:
+                cells.append(cell)
+            elif type(cell) == str or type(cell) == tuple:
+                cells.append(self.cells[utils.normalize_cell_notation(None, cell)])
+            elif type(cell) == int:
+                row = cell
+            else:
+                raise ValueError('Cell reference ' + str(cell) + ' is illegal')
+
+        for cell in cells:
+            cell.formula = formula
+            self._update_display_based_on_formula(cell)
+
+
+
     def _dot_plot(self, event):
         []
 
     def _get_formatted_value(self, match, stringify=False):
         cell = self.cells[utils.normalize_cell_notation(self, match)]
-        return "'" + cell.display_value + "'" if stringify else cell.display_value
+        return "'" + cell.computed_value + "'" if stringify else cell.computed_value
 
     def _cell_convert(self, value, stringify=False):
         return re.sub(r'\[.*?\]', lambda match: self._get_formatted_value(match[0], stringify), value)
@@ -676,38 +717,6 @@ class Spreadsheet(tk.Frame):
         a21.update()
         a22.update()
 
-
-
-    def _print_inverse(self, event):
-        pass
-
-
-
-    def _normalize_cell_notation(self, cell, col=None):
-        if type(cell) == int:
-            if cell == -1:
-                row = self.spreadsheet_rows - 1
-            else:
-                row = cell
-            if col == -1:
-                col = self.spreadsheet_columns - 1
-            cell_coordinates = (row, col)
-        elif type(cell) == tuple:
-            if cell[0] == -1:
-                row = self.spreadsheet_rows - 1
-            else:
-                row = cell[0]
-            if cell[1] == -1:
-                col = self.spreadsheet_columns - 1
-            else:
-                col = cell[1]
-            cell_coordinates = (row, col)
-        elif type(cell) == str:
-            cell_coordinates = utils.get_cell_coordinates(cell)
-
-        return cell_coordinates
-
-
     def _export_to_csv(self, event=None):
         values = self.get()
 
@@ -725,26 +734,38 @@ class Spreadsheet(tk.Frame):
 
         os.startfile(filename)
 
+    def _compute_formula(self, value):
+        try:
+            value = self._process_formula(value)
+        except TypeError:
+            value = self._process_formula(value, number_based = False)
+        except SyntaxError:
+            # Tell the user their syntax was off
+            pass
+
+        return value
+
+
+    def _update_display_based_on_formula(self, cell):
+        cell.computed_value = self._compute_formula(cell.formula_value.strip())
+        cell.config(state='disabled', cursor='plus')
+        cell._align_based_on_entry_type()
+        cell.mode('computed')
+
+    def _on_cell_begin_typing(self, event):
+        cell = self.nametowidget(event.widget)
+        cell.mode('formula')
+
+
     def _on_exit_cell_typing(self, event=None):
         if self._guarantee_widget_focus:
             print("Not leaving the cell quite yet!")
             self.nametowidget(event.widget).focus_set()
         else:
             print('leaving cell!')
-
             cell = self.nametowidget(event.widget)
-
-            value = cell.display_value.strip()
-
-            try:
-                value = self._process_formula(value)
-            except TypeError:
-                value = self._process_formula(value, number_based = False)
-
-            cell.config(state='disabled', cursor='plus')
-
-            cell.display_value = value
-            cell._align_based_on_entry_type()
+            cell._update_formula_value()
+            self._update_display_based_on_formula(cell)
 
             return True
             
@@ -798,7 +819,7 @@ class Spreadsheet(tk.Frame):
     def _start_anchor_entry_cursor(self):
         if self._anchor_cell:
             print('Go to the anchor')
-            self._anchor_cell.display_value = self.gsv.get()
+            self._anchor_cell.formula_value = self.gsv.get()
             self.gsv.set('')
             return self._anchor_cell._entry_start_cursor(highlight=False)
 
@@ -808,7 +829,8 @@ class Spreadsheet(tk.Frame):
             for entry_widget in self._selected_cells:
                 if entry_widget == self._anchor_cell:
                     continue
-                entry_widget.display_value = self._anchor_cell.display_value
+                entry_widget.formula_value = self._anchor_cell.formula_value
+                self.
                 entry_widget._align_based_on_entry_type()
 
     def _prev(self, event = None):
