@@ -69,3 +69,15 @@ def normalize_cell_notation(spreadsheet, cell, column=None):
     row, column = convert_coordinates_from_negative_1(spreadsheet, row, column)
 
     return row, column
+
+
+def compute_formula(self, value):
+    try:
+        value = self.__process_formula(value)
+    except TypeError:
+        value = self.__process_formula(value, number_based = False)
+    except SyntaxError:
+        # Tell the user their syntax was off
+        pass
+
+    return value

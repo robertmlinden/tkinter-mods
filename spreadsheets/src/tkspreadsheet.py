@@ -29,20 +29,26 @@ class Cell(tk.Entry):
         self.bind('<Control-BackSpace>', self.__control_backspace)
         self.bind("<Left>", self.__typing_left)
         self.bind('<Right>', self.__typing_right)
-        self.bind('<KeyRelease>', lambda _ : self._absorb_display())
+        #self.bind('<KeyRelease>', lambda _ : self._absorb_display())
 
         self.__formula_value = ''
         self.__computed_value = ''
 
         self.__mode = 'formula'
 
+    def __update_computed_based_on_formula(self):
+        print('Updating computed value based on formula')
+        self.computed_value = self.__ss.compute_formula(self.formula_value.strip())
+        print('computed value = ' + str(self.computed_value))
+        self.__align_based_on_entry_type()
+        self.mode('computed')
+
     def _absorb_display(self):
         print('absorb!!')
         if self.__mode == 'formula':
-            print(self.sv.get())
-            self.__formula_value = self.sv.get()
+            self.formula_value = self.sv.get()
         else:
-            self.__computed_value = self.sv.get()
+            self.computed_value = self.sv.get()
 
     def __control_backspace(self, event):
         print('Control-backspace')
@@ -71,14 +77,16 @@ class Cell(tk.Entry):
 
     @formula_value.setter
     def formula_value(self, value):
+        print('Setting formula value')
         self.__formula_value = value
+        self.__update_computed_based_on_formula()
         self.__update_display()
+        self.__align_based_on_entry_type()
 
 
     @property
     def computed_value(self):
         return self.__computed_value
-    
 
     @computed_value.setter
     def computed_value(self, value):
@@ -99,13 +107,13 @@ class Cell(tk.Entry):
             self.sv.set(self.__formula_value)
         else:
             print('update compute')
-            self.sv.set(self.__computed_value)
+            self.sv.set(str(self.__computed_value))
 
     def mode(self, _mode):
         self.__mode = _mode
         self.__update_display()
 
-    def align_based_on_entry_type(self):
+    def __align_based_on_entry_type(self):
         print('aligning!')
         try:
             float(self.computed_value)
@@ -248,6 +256,36 @@ class Spreadsheet(tk.Frame):
 
         self.containing_frame.focus_set()
 
+
+    def __get_formatted_value(self, match, stringify=False):
+        cell = self.__cells[utils.normalize_cell_notation(self, match)]
+        return "'" + cell.computed_value + "'" if stringify else cell.computed_value
+
+    def __cell_convert(self, value, stringify=False):
+        return re.sub(r'\[.*?\]', lambda match: self.__get_formatted_value(match[0], stringify), value)
+
+    def __process_formula(self, formula, number_based = True):
+        if formula and formula[0] == '=' and len(formula) > 1:
+            converted_value = self.__cell_convert(formula[1:], not number_based)
+            if number_based:
+                return arithmetic_evaluator.evaluate_expression(converted_value)
+            else:
+                return eval(converted_value)
+        else:
+            return formula
+
+    def compute_formula(self, value):
+        try:
+            value = self.__process_formula(value)
+            print('Arithmetic Expression parsed')
+        except TypeError:
+            value = self.__process_formula(value, number_based = False)
+        except SyntaxError:
+            # Tell the user their syntax was off
+            pass
+
+        return value
+
     def __set_formula(self, formula, *cell_refs):
         cells = []
         row = None
@@ -269,29 +307,11 @@ class Spreadsheet(tk.Frame):
 
         for cell in cells:
             cell.formula = formula
-            self.__update_display_based_on_formula(cell)
 
 
 
     def __dot_plot(self, event):
         []
-
-    def __get_formatted_value(self, match, stringify=False):
-        cell = self.__cells[utils.normalize_cell_notation(self, match)]
-        return "'" + cell.computed_value + "'" if stringify else cell.computed_value
-
-    def __cell_convert(self, value, stringify=False):
-        return re.sub(r'\[.*?\]', lambda match: self.__get_formatted_value(match[0], stringify), value)
-
-    def __process_formula(self, formula, number_based = True):
-        if formula and formula[0] == '=' and len(formula) > 1:
-            converted_value = self.__cell_convert(formula[1:], not number_based)
-            if number_based:
-                return str(arithmetic_evaluator.evaluate_expression(converted_value))
-            else:
-                return eval(converted_value)
-        else:
-            return formula
 
     def __select_all(self, event):
         print('Selecting all cells in the grid!')
@@ -637,8 +657,8 @@ class Spreadsheet(tk.Frame):
             cell.erase_cell_contents()
 
     def __control_d(self, event):
-        print(self.__anchor_cell.formula_value)
         self.god_entry.focus_set()
+        print(self.__anchor_cell.formula_value)
         self.__copy_from_anchor_to_selected(self.__anchor_cell)
 
     def __tab(self, event = None):
@@ -735,24 +755,6 @@ class Spreadsheet(tk.Frame):
 
         os.startfile(filename)
 
-    def __compute_formula(self, value):
-        try:
-            value = self.__process_formula(value)
-        except TypeError:
-            value = self.__process_formula(value, number_based = False)
-        except SyntaxError:
-            # Tell the user their syntax was off
-            pass
-
-        return value
-
-
-    def __update_display_based_on_formula(self, cell):
-        cell.computed_value = self.__compute_formula(cell.formula_value.strip())
-        cell.config(state='disabled', cursor='plus')
-        cell.align_based_on_entry_type()
-        cell.mode('computed')
-
     def __on_cell_focus_in(self, event):
         cell = self.nametowidget(event.widget)
         cell.mode('formula')
@@ -767,7 +769,7 @@ class Spreadsheet(tk.Frame):
             print('leaving cell!')
             cell = self.nametowidget(event.widget)
             cell._absorb_display()
-            self.__update_display_based_on_formula(cell)
+            cell.config(state='disabled', cursor='plus')
 
             return True
             
@@ -824,8 +826,6 @@ class Spreadsheet(tk.Frame):
                 if cell == self.__anchor_cell:
                     continue
                 cell.formula_value = self.__anchor_cell.formula_value
-                self.__update_display_based_on_formula(cell)
-                cell.align_based_on_entry_type()
 
     def __prev(self, event = None):
         if len(self.__selected_cells) == 1:
