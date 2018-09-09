@@ -38,25 +38,14 @@ class Cell(tk.Entry):
 
     def _on_spreadsheet_control_backspace(self, event):
         print('Control-backspace')
-        entry_widget = self.nametowidget(event.widget)
+        cell = self.nametowidget(event.widget)
         self._erase_cell_contents()
-        entry_widget.icursor(0)
+        cell.icursor(0)
         self.focus_set()
 
     def _erase_cell_contents(self):
         self._formula_value = ''
-
-    def _entry_start_cursor(self, highlight=True):
-        print('Focus on entry: ' + repr(self))
-
-        self.config(state='normal', cursor='xterm')
-        self.focus_set()
-        if highlight:
-            self.selection_range(0, 'end')
-        self.icursor(tk.END)
-
-        if self.computed_value:
-            return 'break'
+        
 
     def _on_spreadsheet_typing_left(self, event):
         if self.selection_present():
@@ -297,33 +286,33 @@ class Spreadsheet(tk.Frame):
         print('Selecting all cells in the grid!')
         self._select_range(exclusive=True, anchor='A1', reel=(-1, -1))
 
-    def _select_cells(self, entry_widgets, exclusive=False, flip=False):
-        print('Selecting cells ' + str([cell.cell_index for cell in entry_widgets]))
+    def _select_cells(self, cells, exclusive=False, flip=False):
+        print('Selecting cells ' + str([cell.cell_index for cell in cells]))
         if exclusive:
             self._deselect_all()
         
-        [self._select_cell(cell, exclusive=False, flip=flip) for cell in entry_widgets]
+        [self._select_cell(cell, exclusive=False, flip=flip) for cell in cells]
 
-    def _select_cell(self, entry_widget, anchor=False, exclusive=False, flip=False):
-        print('Selecting cell ' + repr(entry_widget))
+    def _select_cell(self, cell, anchor=False, exclusive=False, flip=False):
+        print('Selecting cell ' + repr(cell))
 
         if exclusive:
             self._deselect_all()          
 
-        if entry_widget in self._selected_cells:
+        if cell in self._selected_cells:
             if flip:
                 print('flip')
-                self._deselect_cell(entry_widget)
+                self._deselect_cell(cell)
             else:
                 if anchor:
-                    self._set_anchor(entry_widget)
+                    self._set_anchor(cell)
                 return
         elif anchor:
-            self._set_anchor(entry_widget)
-            self._selected_cells.append(entry_widget)
+            self._set_anchor(cell)
+            self._selected_cells.append(cell)
         else:
-            entry_widget.config(highlightbackground = 'darkgreen')
-            self._selected_cells.append(entry_widget)
+            cell.config(highlightbackground = 'darkgreen')
+            self._selected_cells.append(cell)
 
         self.god_entry.focus_set()
 
@@ -474,19 +463,19 @@ class Spreadsheet(tk.Frame):
 
     def _on_spreadsheet_click(self, event):
         print(event.type + ': <Button-1>')
-        entry_widget = self.nametowidget(event.widget)
+        cell = self.nametowidget(event.widget)
 
         if not self.focus_get() == event.widget:
-            if [entry_widget] == self._selected_cells:
-                return entry_widget._entry_start_cursor()
+            if [cell] == self._selected_cells:
+                cell.focus_set()
             else:
-                self._select_cell(entry_widget, anchor=True, exclusive=True)
+                self._select_cell(cell, anchor=True, exclusive=True)
                 self.god_entry.focus_set()
 
     def _on_spreadsheet_control_click(self, event):
         print(event.type + ': <Control-Button-1>')
-        entry_widget = self.nametowidget(event.widget)
-        self._select_cell(entry_widget, anchor=True, flip=True)
+        cell = self.nametowidget(event.widget)
+        self._select_cell(cell, anchor=True, flip=True)
 
     def _on_spreadsheet_shift_click(self, event):
         print(event.type + ': <Shift-Button-1>')
@@ -646,7 +635,7 @@ class Spreadsheet(tk.Frame):
     def _on_spreadsheet_enter_key(self, event):
         self._select_cell(self._anchor_cell, exclusive=True, anchor=True)
         if self._anchor_cell:
-            return self._anchor_cell._entry_start_cursor()
+            self.focus_set()
 
     def _on_spreadsheet_control_enter_key(self, event):
         self._deselect_cell(self._anchor_cell)
@@ -752,10 +741,13 @@ class Spreadsheet(tk.Frame):
         cell._align_based_on_entry_type()
         cell.mode('computed')
 
-    def _on_cell_begin_typing(self, event):
+    def _on_cell_begin_typing(self, event, highlight=False):
         cell = self.nametowidget(event.widget)
         cell.mode('formula')
-
+        cell.config(state='normal', cursor='xterm')
+        if highlight:
+            cell.selection_range(0, 'end')
+        cell.icursor(tk.END)
 
     def _on_exit_cell_typing(self, event=None):
         if self._guarantee_widget_focus:
@@ -821,17 +813,17 @@ class Spreadsheet(tk.Frame):
             print('Go to the anchor')
             self._anchor_cell.formula_value = self.gsv.get()
             self.gsv.set('')
-            return self._anchor_cell._entry_start_cursor(highlight=False)
+            self._anchor_cell.focus_set()
 
-    def _copy_from_anchor_to_selected(self, entry = None):
+    def _copy_from_anchor_to_selected(self, cell = None):
         print('Updating all entries!')
-        if entry == self._anchor_cell:
-            for entry_widget in self._selected_cells:
-                if entry_widget == self._anchor_cell:
+        if cell == self._anchor_cell:
+            for cell in self._selected_cells:
+                if cell == self._anchor_cell:
                     continue
-                entry_widget.formula_value = self._anchor_cell.formula_value
-                self.
-                entry_widget._align_based_on_entry_type()
+                cell.formula_value = self._anchor_cell.formula_value
+                self._update_display_based_on_formula(cell)
+                cell._align_based_on_entry_type()
 
     def _prev(self, event = None):
         if len(self._selected_cells) == 1:
