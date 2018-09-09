@@ -6,6 +6,8 @@ Fix errors for arrow, control arrow, shift error when no anchor
 
 Variable trace in Cell entry
 
+Fix dragging outside the window.
+
 
 
 

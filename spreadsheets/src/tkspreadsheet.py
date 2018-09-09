@@ -12,6 +12,8 @@ from PIL import Image, ImageTk
 
 from operator import add
 
+from simpleeval import simple_eval
+
 import os
 
 import csv
@@ -239,6 +241,7 @@ class Spreadsheet(tk.Frame):
         self.god_entry.bind('<Shift-Tab>', self.__shift_tab)
         self.god_entry.bind('<Control-Tab>', self.__shift_tab)
         self.god_entry.bind('<FocusOut>', self.__on_god_entry_focus_out)
+        self.god_entry.bind("<FocusIn>", self._test)
         self.god_entry.bind('<Return>', self.__enter_key)
         self.god_entry.bind('<Control-Return>', self.__control_enter_key)
         self.god_entry.bind('<Shift-Return>', self.__shift_enter_key)
@@ -247,7 +250,6 @@ class Spreadsheet(tk.Frame):
         self.god_entry.bind('<Control-Key-D>', self.__print_determinant)
         self.god_entry.bind('<Control-Key-I>', self.__convert_to_inverse)
         self.god_entry.bind('<Control-Key-E>', self.__export_to_csv)
-        self.god_entry.bind('<Control-Key-p>', self.__dot_plot)
         self.god_entry.bind('<Escape>', self.__escape)
         self.god_entry.bind('<Control-Key-m>', self.__create_macro)
         self.god_entry.bind('<Control-Key-l>', self.__import_macro)
@@ -257,6 +259,10 @@ class Spreadsheet(tk.Frame):
         self.containing_frame.focus_set()
 
 
+    def _test(self, event=None):
+        print('<FocusIn> :::::: God Entry')
+
+
     def __get_formatted_value(self, match, stringify=False):
         cell = self.__cells[utils.normalize_cell_notation(self, match)]
         return "'" + cell.computed_value + "'" if stringify else cell.computed_value
@@ -264,54 +270,22 @@ class Spreadsheet(tk.Frame):
     def __cell_convert(self, value, stringify=False):
         return re.sub(r'\[.*?\]', lambda match: self.__get_formatted_value(match[0], stringify), value)
 
-    def __process_formula(self, formula, number_based = True):
+    def __process_formula(self, formula, number_based = False):
         if formula and formula[0] == '=' and len(formula) > 1:
             converted_value = self.__cell_convert(formula[1:], not number_based)
-            if number_based:
-                return arithmetic_evaluator.evaluate_expression(converted_value)
-            else:
-                return eval(converted_value)
+            return simple_eval(converted_value)
         else:
             return formula
 
     def compute_formula(self, value):
         try:
             value = self.__process_formula(value)
-            print('Arithmetic Expression parsed')
-        except TypeError:
-            value = self.__process_formula(value, number_based = False)
+            print('Expression parsed')
         except SyntaxError:
             # Tell the user their syntax was off
             pass
 
         return value
-
-    def __set_formula(self, formula, *cell_refs):
-        cells = []
-        row = None
-        for cell in cell_refs:
-            if row:
-                column = cell
-                if type(column) != int:
-                    raise ValueError('Cell reference ' + str(cell) + ' needed to be an integer to couple with the previous argument')
-                cells.append(self.__cells[utils.normalize_cell_notation(None, row, column)])
-                row = None
-            elif type(cell) == Cell:
-                cells.append(cell)
-            elif type(cell) == str or type(cell) == tuple:
-                cells.append(self.__cells[utils.normalize_cell_notation(None, cell)])
-            elif type(cell) == int:
-                row = cell
-            else:
-                raise ValueError('Cell reference ' + str(cell) + ' is illegal')
-
-        for cell in cells:
-            cell.formula = formula
-
-
-
-    def __dot_plot(self, event):
-        []
 
     def __select_all(self, event):
         print('Selecting all cells in the grid!')
@@ -657,8 +631,9 @@ class Spreadsheet(tk.Frame):
             cell.erase_cell_contents()
 
     def __control_d(self, event):
+        print('Control-d')
+        self.__anchor_cell._absorb_display()
         self.god_entry.focus_set()
-        print(self.__anchor_cell.formula_value)
         self.__copy_from_anchor_to_selected(self.__anchor_cell)
 
     def __tab(self, event = None):
@@ -766,7 +741,7 @@ class Spreadsheet(tk.Frame):
             print("Not leaving the cell quite yet!")
             self.nametowidget(event.widget).focus_set()
         else:
-            print('leaving cell!')
+            print('leaving cell ' + repr(self.nametowidget(event.widget)))
             cell = self.nametowidget(event.widget)
             cell._absorb_display()
             cell.config(state='disabled', cursor='plus')
