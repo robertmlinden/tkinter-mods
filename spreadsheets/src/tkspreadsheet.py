@@ -31,7 +31,9 @@ class Cell(tk.Entry):
         self.bind("<Left>", self._on_spreadsheet_typing_left)
         self.bind('<Right>', self._on_spreadsheet_typing_right)
 
-    def entry_start_cursor(self, highlight=True):
+        self.formula_value = ''
+
+    def _entry_start_cursor(self, highlight=True):
         print('Focus on entry: ' + repr(self))
 
         self.config(state='normal', cursor='xterm')
@@ -62,6 +64,14 @@ class Cell(tk.Entry):
         self.sv.set(value)
 
     @property
+    def formula(self):
+        return self.formula_value
+
+    @formula.setter
+    def formula(self, value):
+        self.formula_value = value
+
+    @property
     def coordinates(self):
         return utils.normalize_cell_notation(self.cell_index)
 
@@ -76,12 +86,18 @@ class Cell(tk.Entry):
     def _erase_cell_contents(self):
         self.display_value = ''
 
-    def align_based_on_entry_type(self):
+    def _set_background(self, color_string):
+        self.config(background=color_string, disabledbackground=color_string)
+
+    def _align_based_on_entry_type(self):
+        print('aligning!')
         try:
             float(self.display_value)
             self.config(justify='right')
+            #self._set_background('#d8d6ab')
         except ValueError:
             self.config(justify='left')
+            #self._set_background('white')
 
     def __repr__(self):
         return self.cell_index
@@ -422,7 +438,7 @@ class Spreadsheet(tk.Frame):
 
         if not self.focus_get() == event.widget:
             if [entry_widget] == self._selected_cells:
-                return entry_widget.entry_start_cursor()
+                return entry_widget._entry_start_cursor()
             else:
                 self._select_cell(entry_widget, anchor=True, exclusive=True)
                 self.god_entry.focus_set()
@@ -590,7 +606,7 @@ class Spreadsheet(tk.Frame):
     def _on_spreadsheet_enter_key(self, event):
         self._select_cell(self._anchor_cell, exclusive=True, anchor=True)
         if self._anchor_cell:
-            return self._anchor_cell.entry_start_cursor()
+            return self._anchor_cell._entry_start_cursor()
 
     def _on_spreadsheet_control_enter_key(self, event):
         self._deselect_cell(self._anchor_cell)
@@ -726,11 +742,10 @@ class Spreadsheet(tk.Frame):
             except TypeError:
                 value = self._process_formula(value, number_based = False)
 
-            cell.align_based_on_entry_type()
-
             cell.config(state='disabled', cursor='plus')
 
             cell.display_value = value
+            cell._align_based_on_entry_type()
 
             return True
             
@@ -786,7 +801,7 @@ class Spreadsheet(tk.Frame):
             print('Go to the anchor')
             self._anchor_cell.display_value = self.gsv.get()
             self.gsv.set('')
-            return self._anchor_cell.entry_start_cursor(highlight=False)
+            return self._anchor_cell._entry_start_cursor(highlight=False)
 
     def _copy_from_anchor_to_selected(self, entry = None):
         print('Updating all entries!')
@@ -795,7 +810,7 @@ class Spreadsheet(tk.Frame):
                 if entry_widget == self._anchor_cell:
                     continue
                 entry_widget.display_value = self._anchor_cell.display_value
-                entry_widget.update()
+                entry_widget._align_based_on_entry_type()
 
     def _prev(self, event = None):
         if len(self._selected_cells) == 1:
