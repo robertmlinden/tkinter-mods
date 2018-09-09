@@ -22,6 +22,7 @@ class Cell(tk.Entry):
 
         kw['textvariable'] = self.sv
         self.cell_index = kw.pop('cell_index')
+        self.__ss = kw.pop('spreadsheet')
 
         super().__init__(*args, **kw)
 
@@ -177,7 +178,7 @@ class Spreadsheet(tk.Frame):
         for row in range(self.rows):
             for column in range(self.columns):
                 index = (row, column)
-                c = Cell(self, cell_index = utils.get_cell_index(row, column))
+                c = Cell(self, cell_index = utils.get_cell_index(row, column), spreadsheet = self)
                 c.grid(row=row+1, column=column+1, stick="nsew")
                 c.config(justify="left", state='disabled', cursor='plus', highlightthickness = 1, highlightbackground = 'ghost white',
                             disabledbackground='white', highlightcolor = 'goldenrod')
@@ -900,3 +901,82 @@ class Spreadsheet(tk.Frame):
 
         self.god_entry.bind('<Control-Key-R>', self.__run_macro)
         self.god_entry.bind('<Control-Key-r>', self.__run_macro)
+
+
+
+
+
+
+
+
+
+    ###### Public API
+
+    def __getattr__(self, attr):
+        pass
+        # All
+        # Row
+        # Column/ Col
+
+    def __getitem__(self, input):
+        if type(input) == int:
+            pass
+        else:
+            pass
+
+
+class CellsView(object):
+    def __init__(self, ss, *cell_refs):
+        self.__ss = ss
+
+        self.__cells = []
+        row = None
+        for cell in cell_refs:
+            if row:
+                column = cell
+                if type(column) != int:
+                    raise ValueError('Cell reference ' + str(cell) + ' needed to be an integer to couple with the previous argument')
+                self.__cells.append(self.__cells[utils.normalize_cell_notation(None, row, column)])
+                row = None
+            elif type(cell) == Cell:
+                self.__cells.append(cell)
+            elif type(cell) == str or type(cell) == tuple:
+                self.__cells.append(self.__cells[utils.normalize_cell_notation(None, cell)])
+            elif type(cell) == int:
+                row = cell
+            else:
+                raise ValueError('Cell reference ' + str(cell) + ' is illegal')
+
+    def keys(self):
+        _keys = []
+        for cell in self.__cells:
+            _keys.append(cell.cell_index)
+        return _keys
+
+    def __sub__(self, other):
+        cell_refs = list(set(self.keys()) - set(other.keys()))
+
+        return CellsView(self.__ss, *cell_refs)
+
+    def __add__(self, other):
+        cell_refs = list(set(self.keys()) + set(other.keys()))
+
+        return CellsView(self.__ss, *cell_refs)
+
+    def apply_formula(self, formula):
+        for cell in self.__cells:
+            cell.formula = formula
+
+    def get_formula(self):
+        pass
+        # If the formula of all of the cells is the same, return the formula
+        # Else throw an exception or something
+        # Or even better return a dictionary of cell to formula
+
+    
+    def get_computed_value(self):
+        pass
+
+    get_display_value = get_computed_value
+
+
