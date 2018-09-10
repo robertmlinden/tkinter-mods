@@ -8,6 +8,8 @@ Variable trace in Cell entry
 
 Fix dragging outside the window.
 
+Cells Iterator is public
+
 
 
 

@@ -880,15 +880,25 @@ class Spreadsheet(tk.Frame):
 
 
 
-
-
-
-
-
     ###### Public API
 
+    def __iter__(self):
+        return CellsIterator(self)
+
+
     def __getattr__(self, attr):
-        pass
+        if attr.lower() == 'all' or attr.lower() == 'everything':
+            cell_refs = []
+            for cell in self:
+                cell_refs.append(cell)
+            return cell
+        if attr.lower() == 'row':
+            cell_refs
+            for row in range(self.rows):
+                for column in range(self.columns):
+                    cell_refs.append((row, column))
+            return CellsView(self, *cell_refs)
+            
         # All
         # Row
         # Column/ Col
@@ -898,6 +908,64 @@ class Spreadsheet(tk.Frame):
             pass
         else:
             pass
+
+
+
+
+
+
+
+from enum import Enum
+class IteratorType(Enum):
+    CELLS = 0
+    ROWS = 1
+    COLUMNS = 2
+
+class CellsIterator(object):
+
+    def __init__(self, ss, method=IteratorType.ROWS):
+        self.__method = method
+
+        self.__row = 0
+        self.__col = 0
+
+        self.__rows = self.__ss.rows
+        self.__cols = self.__ss.columns
+
+
+    def __next__(self):
+        if self.__method == IteratorType.CELLS:
+
+            cell = CellsView(self.__ss, self.__row, self.__col)
+            if self.__col < self.cols - 1:
+                self.__col += 1
+            elif self.__row < self.rows - 1:
+                self.__row += 1
+                self.__col = 0
+            else:
+                raise StopIteration
+
+            return cell
+
+        elif self.__method == IteratorType.ROWS:
+
+            row = CellsView(self.__ss, *[(self.__row, col) for col in range(self.__cols)])
+            if self.__row < self.__rows - 1:
+                self.__row += 1
+            else:
+                raise StopIteration
+
+
+        elif self.__method == IteratorType.COLUMNS:
+
+            col = CellsView(self.__ss, *[(row, self.__col) for row in range(self.__rows)])
+            if self.__col < self.__cols - 1:
+                self.__col += 1
+            else:
+                raise StopIteration
+
+
+
 
 
 class CellsView(object):
@@ -934,23 +1002,40 @@ class CellsView(object):
         return CellsView(self.__ss, *cell_refs)
 
     def __add__(self, other):
-        cell_refs = list(set(self.keys()) + set(other.keys()))
+        cell_refs = list(set(self.keys()) | set(other.keys()))
 
         return CellsView(self.__ss, *cell_refs)
 
-    def apply_formula(self, formula):
+    def set_formula(self, formula):
         for cell in self.__cells:
             cell.formula = formula
 
-    def get_formula(self):
-        pass
-        # If the formula of all of the cells is the same, return the formula
-        # Else throw an exception or something
-        # Or even better return a dictionary of cell to formula
+    def get_formulas(self, keytype=str):
+        formulas = {}
+        for cell in self.__cells:
+            key = None
+            if keytype == str:
+                key = cell.cell_index
+            elif keytype == tuple:
+                key = cell.coordinates
+            else:
+                key = cell
+            formulas[key] = cell.formula_value
+        return formulas
 
     
-    def get_computed_value(self):
-        pass
+    def get_computed_values(self, keytype=str):
+        computed_values = {}
+        for cell in self.__cells:
+            key = None
+            if keytype == str:
+                key = cell.cell_index
+            elif keytype == tuple:
+                key = cell.coordinates
+            else:
+                key = cell
+            computed_values[key] = cell.computed_value
+        return computed_values
 
     get_display_value = get_computed_value
 
