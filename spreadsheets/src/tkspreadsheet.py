@@ -888,16 +888,14 @@ class Spreadsheet(tk.Frame):
 
     def __getattr__(self, attr):
         if attr.lower() == 'all' or attr.lower() == 'everything':
-            cell_refs = []
-            for cell in self:
-                cell_refs.append(cell)
-            return cell
-        if attr.lower() == 'row':
-            cell_refs
-            for row in range(self.rows):
-                for column in range(self.columns):
-                    cell_refs.append((row, column))
-            return CellsView(self, *cell_refs)
+            return CellsIterator(self)
+        elif attr.lower() == 'row':
+            return CellsIterator(self, method=IteratorType.ROWS)
+        elif attr.lower() == 'column' or attr.lower() == 'col':
+            return CellsIterator(self, method=IteratorType.COLUMNS)
+        else:
+            raise AttributeError('"' + attr + '" is not an attribute of ' + repr(self) + '\n' + 
+                                    'Attributes include all/everything, row, column/col')
             
         # All
         # Row
@@ -906,7 +904,7 @@ class Spreadsheet(tk.Frame):
     def __getitem__(self, input):
         if type(input) == int:
             pass
-        else:
+        elif type(input) == slice:
             pass
 
 
@@ -920,32 +918,97 @@ class IteratorType(Enum):
     CELLS = 0
     ROWS = 1
     COLUMNS = 2
+    COLS = 2
+    FREE_FORM = 3
 
 class CellsIterator(object):
 
-    def __init__(self, ss, method=IteratorType.ROWS):
+    def __init__(self, ss, method=IteratorType.CELLS, start=None, stop=None, is_reversed = False):
         self.__method = method
 
-        self.__row = 0
-        self.__col = 0
+        start_and_stop_correct_ordering = start[0] < stop[0] or (start[0] == stop[0] and start[1] <= stop[1])
+        if start_and_stop_correct_ordering:
+            self.__start = self.__start_row, self.__start_col = start
+            self.__stop = self.__stop_row, self.__stop_col = stop
+        else:
+            self.__start = self.__start_row, self.__start_col = stop
+            self.__stop = self.__stop_row, self.__stop_col = start
+
+        self.__reversed = is_reversed
+
+        self.__row = self.__start_row
+        self.__col = self.__start_col
 
         self.__rows = self.__ss.rows
         self.__cols = self.__ss.columns
 
+    def __reversed__(self):
+        return CellsIterator(self.__ss, self.__method, start=self.__start, stop = self.__stop, is_reversed = not self.__reversed)
 
+    def __getitem__(self, index):
+        if type(index) == int:
+            ci = CellsIterator(self.__ss, self.__method)
+            for iteration in range(index):
+                try:
+                    next(ci)
+                except StopIteration:
+                    raise IndexError
+            return next(ci)
+        elif type(index) == slice:
+            pass
+        else:
+            raise ValueError('Indexing only supports integer and slice indices; ' + repr(index) + ' is neither of those')
+
+
+    #########################################################
+    ##################################################
+
+    #########################################################
+    ##################################################
+    #########################################################
+    ##################################################
+    #########################################################
+    ################################################## PICK UP HERE!
     def __next__(self):
         if self.__method == IteratorType.CELLS:
+            if self.__reversed:
+                cell = CellsView(self.__ss, self.__row, self.__col)
 
-            cell = CellsView(self.__ss, self.__row, self.__col)
-            if self.__col < self.cols - 1:
-                self.__col += 1
-            elif self.__row < self.rows - 1:
-                self.__row += 1
-                self.__col = 0
+                if self.__row < self.__max_row:
+                    raise StopIteration
+                if self.__row == self.__max_row:
+                    if self.__col < self.__stop_col:
+                        raise StopIteration
+                    else:
+                        self.__col -= 1
+                if self.__col > 0:
+                    self.__col -= 1
+                else: # self.__row > self.__max_row and self.__col == self.__cols - 1
+                    self.__row -= 1
+                    self.__col = self.__cols - 1
+                else:
+                    raise StopIteration
+
+                return cell
+
             else:
-                raise StopIteration
+                cell = CellsView(self.__ss, self.__row, self.__col)
+                if self.__row > self.__max_row:
+                    raise StopIteration
+                if self.__row == self.__max_row:
+                    if self.__col > self.__stop_col:
+                        raise StopIteration
+                    else:
+                        self.__col += 1
+                if self.__col < self.__cols:
+                    self.__col += 1
+                else: # self.__row < self.__max_row and self.__col == self.__cols - 1
+                    self.__row += 1
+                    self.__col = 0
+                else:
+                    raise StopIteration
 
-            return cell
+                return cell
 
         elif self.__method == IteratorType.ROWS:
 
@@ -1037,6 +1100,6 @@ class CellsView(object):
             computed_values[key] = cell.computed_value
         return computed_values
 
-    get_display_value = get_computed_values
+    get_display_values = get_computed_values
 
 
