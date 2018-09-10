@@ -192,13 +192,13 @@ class Spreadsheet(tk.Frame):
                 c.grid(row=row+1, column=column+1, stick="nsew")
                 c.config(justify="left", state='disabled', cursor='plus', highlightthickness = 1, highlightbackground = 'ghost white',
                             disabledbackground='white', highlightcolor = 'goldenrod')
-                c.bind("<Button-1>", self.__click)
-                c.bind("<Control-Button-1>", self.__control_click)
-                c.bind("<Shift-Button-1>", self.__shift_click)
-                c.bind("<Control-Shift-Button-1>", self.__control_shift_click)
-                c.bind("<B1-Motion>", self.__mouse_motion)
-                c.bind('<Tab>', self.__next)
-                c.bind('<Shift-Tab>', self.__prev)
+                c.bind("<Button-1>", self.__click_cell)
+                c.bind("<Control-Button-1>", self.__control_click_cell)
+                c.bind("<Shift-Button-1>", self.__shift_click_cell)
+                c.bind("<Control-Shift-Button-1>", self.__control_shift_click_cell)
+                c.bind("<B1-Motion>", self.__on_cell_mouse_motion)
+                c.bind('<Tab>', self.__next_cell)
+                c.bind('<Shift-Tab>', self.__prev_cell)
                 c.bind('<Return>', self.__down)
                 c.bind('<Down>', self.__down)
                 c.bind('<Up>', self.__up)
@@ -241,7 +241,6 @@ class Spreadsheet(tk.Frame):
         self.god_entry.bind('<Shift-Tab>', self.__shift_tab)
         self.god_entry.bind('<Control-Tab>', self.__shift_tab)
         self.god_entry.bind('<FocusOut>', self.__on_god_entry_focus_out)
-        self.god_entry.bind("<FocusIn>", self._test)
         self.god_entry.bind('<Return>', self.__enter_key)
         self.god_entry.bind('<Control-Return>', self.__control_enter_key)
         self.god_entry.bind('<Shift-Return>', self.__shift_enter_key)
@@ -257,10 +256,6 @@ class Spreadsheet(tk.Frame):
         self.__guarantee_focus = False
 
         self.containing_frame.focus_set()
-
-
-    def _test(self, event=None):
-        print('<FocusIn> :::::: God Entry')
 
 
     def __get_formatted_value(self, match, stringify=False):
@@ -373,7 +368,7 @@ class Spreadsheet(tk.Frame):
             self.__set_anchor(anchor, add=True)
 
         if reel:
-            self.__set_reel(reel)
+            self.__set_reel_cell(reel)
         
         prev_reel_cell = self.__anchor_cell if exclusive else self.__prev_reel_cell
 
@@ -455,12 +450,12 @@ class Spreadsheet(tk.Frame):
         cell.config(highlightbackground = 'goldenrod')
         self.__restore_borders(self.__anchor_cell, method='selected')
 
-        self.__set_reel(cell)
+        self.__set_reel_cell(cell)
 
         if add and cell not in self.__selected_cells:
             self.__selected_cells.append(cell)
 
-    def __set_reel(self, cell, col=None):
+    def __set_reel_cell(self, cell, col=None):
         if type(cell) != Cell:
             cell = self.__cells[utils.normalize_cell_notation(self, cell, col)]
 
@@ -468,9 +463,11 @@ class Spreadsheet(tk.Frame):
 
         print('Reel cell is now ' + repr(self.__reel_cell))
 
-    def __click(self, event):
+    def __click_cell(self, event):
         print(event.type + ': <Button-1>')
         cell = self.nametowidget(event.widget)
+
+        #self.__min_x = self.__
 
         if not self.focus_get() == event.widget:
             if [cell] == self.__selected_cells:
@@ -479,22 +476,22 @@ class Spreadsheet(tk.Frame):
                 self.__select_cell(cell, anchor=True, exclusive=True)
                 self.god_entry.focus_set()
 
-    def __control_click(self, event):
+    def __control_click_cell(self, event):
         print(event.type + ': <Control-Button-1>')
         cell = self.nametowidget(event.widget)
         self.__select_cell(cell, anchor=True, flip=True)
 
-    def __shift_click(self, event):
+    def __shift_click_cell(self, event):
         print(event.type + ': <Shift-Button-1>')
         self.__deselect_all(but=[self.__anchor_cell])
         self.__select_range(reel = self.nametowidget(event.widget), exclusive = True)
 
-    def __control_shift_click(self, event):
+    def __control_shift_click_cell(self, event):
         print(event.type + ': <Control-Shift-Button-1>')
         self.__select_range(reel = self.nametowidget(event.widget))
 
-    def __mouse_motion(self, event):
-        self.__set_reel(self.winfo_containing(event.x_root, event.y_root))
+    def __on_cell_mouse_motion(self, event):
+        self.__set_reel_cell(self.winfo_containing(event.x_root, event.y_root))
         if self.__reel_cell not in self.__cells.values():
             print(str(self.__reel_cell) + ' is out of bounds')
             return
@@ -509,7 +506,7 @@ class Spreadsheet(tk.Frame):
         offset = (0, 0)
         if reel_row > 0:
             offset = (-1, 0)
-        self.__set_reel(self.__cells[tuple(map(add, reel_coords, offset))])
+        self.__set_reel_cell(self.__cells[tuple(map(add, reel_coords, offset))])
         self.__select_range()
 
     def __shift_down(self, event=None):
@@ -517,7 +514,7 @@ class Spreadsheet(tk.Frame):
         offset = (0, 0)
         if reel_row < self.rows - 1:
             offset = (1, 0)
-        self.__set_reel(self.__cells[tuple(map(add, reel_coords, offset))])
+        self.__set_reel_cell(self.__cells[tuple(map(add, reel_coords, offset))])
         self.__select_range()
 
     def __shift_left(self, event=None):
@@ -525,7 +522,7 @@ class Spreadsheet(tk.Frame):
         offset = (0, 0)
         if reel_col > 0:
             offset = (0, -1)
-        self.__set_reel(self.__cells[tuple(map(add, reel_coords, offset))])
+        self.__set_reel_cell(self.__cells[tuple(map(add, reel_coords, offset))])
         self.__select_range()
 
 
@@ -534,7 +531,7 @@ class Spreadsheet(tk.Frame):
         offset = (0, 0)
         if reel_col < self.columns - 1:
             offset = (0, 1)
-        self.__set_reel(self.__cells[tuple(map(add, reel_coords, offset))])
+        self.__set_reel_cell(self.__cells[tuple(map(add, reel_coords, offset))])
         self.__select_range()
 
     def __up(self, event = None, exclusive = True):
@@ -637,10 +634,10 @@ class Spreadsheet(tk.Frame):
         self.__copy_from_anchor_to_selected(self.__anchor_cell)
 
     def __tab(self, event = None):
-        self.__next()
+        self.__next_cell()
 
     def __shift_tab(self, event=None):
-        self.__prev()
+        self.__prev_cell()
 
     def __enter_key(self, event):
         print('<Enter>')
@@ -802,7 +799,7 @@ class Spreadsheet(tk.Frame):
                     continue
                 cell.formula_value = self.__anchor_cell.formula_value
 
-    def __prev(self, event = None):
+    def __prev_cell(self, event = None):
         if len(self.__selected_cells) == 1:
             self.__left(wrap=True)
         elif len(self.__selected_cells) > 1:
@@ -813,7 +810,7 @@ class Spreadsheet(tk.Frame):
         self.__guarantee_focus = True
 
 
-    def __next(self, event = None):
+    def __next_cell(self, event = None):
         if len(self.__selected_cells) == 1:
             self.__right(wrap=True)
         elif len(self.__selected_cells) > 1:
@@ -848,10 +845,13 @@ class Spreadsheet(tk.Frame):
         os.startfile(filename)
 
     def __run_macro(self, event):
+        # Detect changes to file
+        importlib.reload(self.active_macro_import)
+
         self.active_macro_import.run(self)
 
     def __import_macro(self, event):
-        active_macro_fullpath = filedialog.askopenfilename(title='Create Macro File', initialdir=self.program_paths['index'], filetypes=[('Python File', '*.py')])
+        active_macro_fullpath = filedialog.askopenfilename(title='Create Macro File', initialdir=os.path.join(self.program_paths['index'], 'macros'), filetypes=[('Python File', '*.py')])
 
         self.active_macro_name = os.path.split(active_macro_fullpath)[-1]
 
@@ -869,9 +869,6 @@ class Spreadsheet(tk.Frame):
             init_file.write('\nimport ' + thingy + '\n')
 
         self.active_macro_import = importlib.import_module(thingy)
-
-        # Detect changes to file
-        importlib.reload(self.active_macro_import)
 
 
         self.god_entry.bind('<Control-Key-R>', self.__run_macro)
@@ -921,10 +918,18 @@ class IteratorType(Enum):
     COLS = 2
     FREE_FORM = 3
 
+
 class CellsIterator(object):
 
-    def __init__(self, ss, method=IteratorType.CELLS, start=None, stop=None, is_reversed = False):
+    # Allow iterating over a random list of coordinates, row/column/cell styles
+
+    def __init__(self, ss, method=IteratorType.CELLS, start=(0, 0), stop=(-1,  -1), step = 1):
         self.__method = method
+
+        self.__ss = ss
+
+        start = utils.convert_coordinates_from_negative_1(self.__ss, *start)
+        stop = utils.convert_coordinates_from_negative_1(self.__ss, *stop)        
 
         start_and_stop_correct_ordering = start[0] < stop[0] or (start[0] == stop[0] and start[1] <= stop[1])
         if start_and_stop_correct_ordering:
@@ -934,7 +939,7 @@ class CellsIterator(object):
             self.__start = self.__start_row, self.__start_col = stop
             self.__stop = self.__stop_row, self.__stop_col = start
 
-        self.__reversed = is_reversed
+        self.__step = step
 
         self.__row = self.__start_row
         self.__col = self.__start_col
@@ -942,38 +947,34 @@ class CellsIterator(object):
         self.__rows = self.__ss.rows
         self.__cols = self.__ss.columns
 
+
     def __reversed__(self):
-        return CellsIterator(self.__ss, self.__method, start=self.__start, stop = self.__stop, is_reversed = not self.__reversed)
+        return CellsIterator(self.__ss, self.__method, start=self.__start, stop = self.__stop, step = -1 * self.__step)
+
 
     def __getitem__(self, index):
         if type(index) == int:
-            ci = CellsIterator(self.__ss, self.__method)
+            ci = CellsIterator(self.__ss, self.__method, start=self.__start, stop = self.__stop, step = self.__step)
             for iteration in range(index):
                 try:
                     next(ci)
                 except StopIteration:
                     raise IndexError
             return next(ci)
-        elif type(index) == slice:
-            pass
+        elif isinstance(index, slice):
+            start = index.start if index.start else 0
+            stop = index.stop if index.stop else -1
+            step = index.step if index.step else 1
+            ci = CellsIterator(self.__ss, self.__method, start=start, stop=stop, step=step)
         else:
             raise ValueError('Indexing only supports integer and slice indices; ' + repr(index) + ' is neither of those')
 
 
-    #########################################################
-    ##################################################
-
-    #########################################################
-    ##################################################
-    #########################################################
-    ##################################################
-    #########################################################
-    ################################################## PICK UP HERE!
     def __next__(self):
         if self.__method == IteratorType.CELLS:
-            if self.__reversed:
-                cell = CellsView(self.__ss, self.__row, self.__col)
-
+            cell = CellsView(self.__ss, self.__row, self.__col)
+            
+            if self.__step < 0:
                 if self.__row < self.__max_row:
                     raise StopIteration
                 if self.__row == self.__max_row:
@@ -986,13 +987,10 @@ class CellsIterator(object):
                 else: # self.__row > self.__max_row and self.__col == self.__cols - 1
                     self.__row -= 1
                     self.__col = self.__cols - 1
-                else:
-                    raise StopIteration
 
                 return cell
 
-            else:
-                cell = CellsView(self.__ss, self.__row, self.__col)
+            elif self.__step > 0:
                 if self.__row > self.__max_row:
                     raise StopIteration
                 if self.__row == self.__max_row:
@@ -1005,28 +1003,46 @@ class CellsIterator(object):
                 else: # self.__row < self.__max_row and self.__col == self.__cols - 1
                     self.__row += 1
                     self.__col = 0
-                else:
-                    raise StopIteration
 
                 return cell
 
         elif self.__method == IteratorType.ROWS:
 
             row = CellsView(self.__ss, *[(self.__row, col) for col in range(self.__cols)])
-            if self.__row < self.__rows - 1:
-                self.__row += 1
-            else:
-                raise StopIteration
+
+            if self.__step > 0:
+                if self.__row > 0:
+                    self.__row -= 1
+                else:
+                    raise StopIteration
+            elif self.__step < 0:
+                if self.__row < self.__rows - 1:
+                    self.__row += 1
+                else:
+                    raise StopIteration            
 
 
         elif self.__method == IteratorType.COLUMNS:
 
             col = CellsView(self.__ss, *[(row, self.__col) for row in range(self.__rows)])
-            if self.__col < self.__cols - 1:
-                self.__col += 1
-            else:
-                raise StopIteration
 
+            if self.__step > 0:
+                if self.__col > 0:
+                    self.__col -= 1
+                else:
+                    raise StopIteration
+            elif self.__step < 0:
+                if self.__col < self.__cols - 1:
+                    self.__col += 1
+                else:
+                    raise StopIteration
+
+    def to_cellsview(self):
+        ci = deepcopy(self)
+        cv = CellsView(self.__ss)
+        for cv_a in ci:
+            cv += cv_a
+        return cv
 
 
 
@@ -1052,6 +1068,19 @@ class CellsView(object):
                 row = cell
             else:
                 raise ValueError('Cell reference ' + str(cell) + ' is illegal')
+
+    def indices(self, forcelist=False):
+        if not self.__cells:
+            return None
+
+        elif len(self.__cells) == 1 and forcelist == False:
+            return self.__cells[0].cell_index
+
+        else:
+            return [cell.cell_index for cell in self.__cells]
+
+    index = indices
+
 
     def keys(self):
         _keys = []
@@ -1103,3 +1132,5 @@ class CellsView(object):
     get_display_values = get_computed_values
 
 
+    def to_list(self):
+        pass
