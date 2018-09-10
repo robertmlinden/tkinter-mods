@@ -1037,6 +1037,6 @@ class CellsView(object):
             computed_values[key] = cell.computed_value
         return computed_values
 
-    get_display_value = get_computed_value
+    get_display_value = get_computed_values
 
 
