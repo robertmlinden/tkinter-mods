@@ -19,6 +19,10 @@ First color is red
 Then ...
 ....
 
+
+COMBINE TWO CLASSES (ITERATOR AND VIEW) INTO ONE!!!!
+
+
 wrap api
 
 

@@ -14,6 +14,8 @@ from operator import add
 
 from simpleeval import simple_eval
 
+from copy import copy
+
 import os
 
 import csv
@@ -98,7 +100,7 @@ class Cell(tk.Entry):
     
     @property
     def coordinates(self):
-        return utils.normalize_cell_notation(None, self.cell_index)
+        return utils.normalize_cell_notation(self.__ss.rows, self.__ss.columns, self.cell_index)
 
     def __set_background(self, color_string):
         self.config(background=color_string, disabledbackground=color_string)
@@ -134,11 +136,11 @@ class Spreadsheet(tk.Frame):
 
         self.containing_frame = parent
 
-        self.__cells = {}
-
         self.rows = rows
         self.columns = columns
         self.cols = columns
+
+        self.__cells = [[None for j in range(self.columns)] for i in range(self.rows)]
 
         self.__anchor_cell = None
         self.__reel_cell = None
@@ -157,9 +159,9 @@ class Spreadsheet(tk.Frame):
 
         image_label = tk.Label(self, image=ph)
         image_label.grid(row=0, column=0, sticky='se')
-        image_label.image=ph  #need to keep the reference of your image to avoid garbage collection
+        image_label.image=ph  #need to keep the reference of image to avoid garbage collection
 
-        image_label.bind('<Button-1>', self.__select_all)
+        image_label.bind('<Button-1>', self.__select_all_cells)
         image_label.config(cursor='lr_angle')
 
         for column in range(self.columns):
@@ -184,11 +186,12 @@ class Spreadsheet(tk.Frame):
             l.bind('<B1-Motion>', self.__on_row_label_mouse_motion)
             self.__row_labels.append(l)
 
-        # create the table of widgets
+        # create the table of cell widgets
         for row in range(self.rows):
             for column in range(self.columns):
                 index = (row, column)
                 c = Cell(self, cell_index = utils.get_cell_index(row, column), spreadsheet = self)
+                print(utils.get_cell_index(row, column))
                 c.grid(row=row+1, column=column+1, stick="nsew")
                 c.config(justify="left", state='disabled', cursor='plus', highlightthickness = 1, highlightbackground = 'ghost white',
                             disabledbackground='white', highlightcolor = 'goldenrod')
@@ -207,15 +210,17 @@ class Spreadsheet(tk.Frame):
                 c.bind('<FocusOut>', self.__on_exit_cell_typing)
                 c.bind('<Control-Key-d>', self.__control_d)
                 c.bind('<Control-Key-E>', self.__export_to_csv)
-                c.bind('<Control-Key-a>', self.__select_all)
+                c.bind('<Control-Key-a>', self.__select_all_cells)
 
-                self.__cells[index] = c
+                self.__cells[row][column] = c
+
+        self.__cells_flattened = self.__flatten_cells()
 
         # adjust column weights so they all expand equally
         for column in range(self.columns):
             self.grid_columnconfigure(column, weight=1)
         # designate a final, empty row to fill up any extra space
-        self.grid_rowconfigure(rows, weight=1)
+        #self.grid_rowconfigure(rows, weight=1)
 
         self.gsv = tk.StringVar()
         self.gsv.trace_add('write', lambda idc, idc2, idc3: self.__start_anchor_entry_cursor())
@@ -245,7 +250,7 @@ class Spreadsheet(tk.Frame):
         self.god_entry.bind('<Control-Return>', self.__control_enter_key)
         self.god_entry.bind('<Shift-Return>', self.__shift_enter_key)
         self.god_entry.bind('<Control-Key-d>', self.__control_d)
-        self.god_entry.bind('<Control-Key-a>', self.__select_all)
+        self.god_entry.bind('<Control-Key-a>', self.__select_all_cells)
         self.god_entry.bind('<Control-Key-D>', self.__print_determinant)
         self.god_entry.bind('<Control-Key-I>', self.__convert_to_inverse)
         self.god_entry.bind('<Control-Key-E>', self.__export_to_csv)
@@ -257,9 +262,13 @@ class Spreadsheet(tk.Frame):
 
         self.containing_frame.focus_set()
 
+    def __flatten_cells(self):
+        return [cell for row in self.__cells for cell in row]
+
 
     def __get_formatted_value(self, match, stringify=False):
-        cell = self.__cells[utils.normalize_cell_notation(self, match)]
+        row, column = utils.normalize_cell_notation(self.rows, self.columns, match)
+        cell = self.__cells[row][column]
         return "'" + cell.computed_value + "'" if stringify else cell.computed_value
 
     def __cell_convert(self, value, stringify=False):
@@ -282,7 +291,7 @@ class Spreadsheet(tk.Frame):
 
         return value
 
-    def __select_all(self, event):
+    def __select_all_cells(self, event):
         print('Selecting all cells in the grid!')
         self.__select_range(exclusive=True, anchor='A1', reel=(-1, -1))
         return 'break'
@@ -290,7 +299,7 @@ class Spreadsheet(tk.Frame):
     def __select_cells(self, cells, exclusive=False, flip=False):
         print('Selecting cells ' + str([cell.cell_index for cell in cells]))
         if exclusive:
-            self.__deselect_all()
+            self.__deselect_all_cells()
         
         [self.__select_cell(cell, exclusive=False, flip=flip) for cell in cells]
 
@@ -298,7 +307,7 @@ class Spreadsheet(tk.Frame):
         print('Selecting cell ' + repr(cell))
 
         if exclusive:
-            self.__deselect_all()          
+            self.__deselect_all_cells()          
 
         if cell in self.__selected_cells:
             if flip:
@@ -321,7 +330,7 @@ class Spreadsheet(tk.Frame):
 
 
 
-    def __deselect_all(self, but=[]):
+    def __deselect_all_cells(self, but=[]):
         print('deselect all')
 
         self.__deselect_cells([cell for cell in self.__selected_cells if cell not in but])
@@ -362,7 +371,7 @@ class Spreadsheet(tk.Frame):
 
         if exclusive:
             but = [self.__anchor_cell] if keepanchor else []
-            self.__deselect_all(but=but)
+            self.__deselect_all_cells(but=but)
 
         if anchor:
             self.__set_anchor(anchor, add=True)
@@ -389,22 +398,22 @@ class Spreadsheet(tk.Frame):
         if row_range[-1] > prev_row_range[-1]:
             print('The row minimum increased')
             for row in range(prev_row_range[-1], row_range[-1]):
-                self.__deselect_cells([self.__cells[(row, column)] for column in prev_column_range])
+                self.__deselect_cells([self.__cells[row][column] for column in prev_column_range])
 
         elif row_range[0] < prev_row_range[0]:
             print('The row maximum decreased')
             for row in range(prev_row_range[0], row_range[0], -1):
-                self.__deselect_cells([self.__cells[(row, column)] for column in prev_column_range])
+                self.__deselect_cells([self.__cells[row][column] for column in prev_column_range])
 
         if row_range[-1] < prev_row_range[-1]:
             print('The row minimum decreased')
             for row in range(row_range[-1], prev_row_range[-1]):
-                self.__select_cells([self.__cells[(row, column)] for column in prev_column_range], flip=flip)
+                self.__select_cells([self.__cells[row][column] for column in prev_column_range], flip=flip)
 
         elif row_range[0] > prev_row_range[0]:
             print('The row maximum increased')
             for row in range(row_range[0], prev_row_range[0], -1):
-                self.__select_cells([self.__cells[(row, column)] for column in prev_column_range], flip=flip)
+                self.__select_cells([self.__cells[row][column] for column in prev_column_range], flip=flip)
 
         
 
@@ -412,23 +421,23 @@ class Spreadsheet(tk.Frame):
         if column_range[-1] > prev_column_range[-1]:
             print('The column minimum increased')
             for column in range(prev_column_range[-1], column_range[-1]):
-                self.__deselect_cells([self.__cells[(row, column)] for row in row_range])
+                self.__deselect_cells([self.__cells[row][column] for row in row_range])
 
         elif column_range[0] < prev_column_range[0]:
             print('The column maximum decreased')
             for column in range(prev_column_range[0], column_range[0], -1):
-                self.__deselect_cells([self.__cells[(row, column)] for row in row_range])
+                self.__deselect_cells([self.__cells[row][column] for row in row_range])
 
 
         if column_range[-1] < prev_column_range[-1]:
             print('The column minimum decreased')
             for column in range(column_range[-1], prev_column_range[-1]):
-                self.__select_cells([self.__cells[(row, column)] for row in row_range], flip=flip)
+                self.__select_cells([self.__cells[row][column] for row in row_range], flip=flip)
 
         elif column_range[0] > prev_column_range[0]:
             print('The column maximum increased')
             for column in range(column_range[0], prev_column_range[0], -1):
-                self.__select_cells([self.__cells[(row, column)] for row in row_range], flip=flip)
+                self.__select_cells([self.__cells[row][column] for row in row_range], flip=flip)
 
 
 
@@ -438,7 +447,8 @@ class Spreadsheet(tk.Frame):
             return
 
         if type(cell) != Cell:
-            cell = self.__cells[utils.normalize_cell_notation(self, cell, col)]
+            row, column = utils.normalize_cell_notation(self.rows, self.columns, cell, col)
+            cell = self.__cells[row][column]
 
         if flip and cell in self.__selected_cells:
             self.__deselect_cell(cell)
@@ -446,9 +456,10 @@ class Spreadsheet(tk.Frame):
 
         print('Setting cell ' + repr(cell) + ' to anchor')
 
+        if self.__anchor_cell in self.__selected_cells:
+            self.__anchor_cell.config(highlightbackground = 'darkgreen')
         self.__anchor_cell = cell
-        cell.config(highlightbackground = 'goldenrod')
-        self.__restore_borders(self.__anchor_cell, method='selected')
+        self.__anchor_cell.config(highlightbackground = 'goldenrod')
 
         self.__set_reel_cell(cell)
 
@@ -457,17 +468,28 @@ class Spreadsheet(tk.Frame):
 
     def __set_reel_cell(self, cell, col=None):
         if type(cell) != Cell:
-            cell = self.__cells[utils.normalize_cell_notation(self, cell, col)]
+            row, column = utils.normalize_cell_notation(self.rows, self.columns, cell, col)
+            cell = self.__cells[row][column]
 
         self.__reel_cell, self.__prev_reel_cell = cell, self.__reel_cell
 
         print('Reel cell is now ' + repr(self.__reel_cell))
 
+    def __init_click_events(self, event):
+        self.__min_x = self.__cells[0][0].winfo_rootx()
+        self.__min_y = self.__cells[0][0].winfo_rooty()
+
+        row, column = utils.convert_coordinates_from_negative_1(self.rows, self.cols, -1, -1)
+        last_cell = self.__cells[row][column]
+
+        self.__max_x = last_cell.winfo_rootx() + last_cell.winfo_width()
+        self.__max_y = last_cell.winfo_rooty() + last_cell.winfo_height()
+
     def __click_cell(self, event):
         print(event.type + ': <Button-1>')
         cell = self.nametowidget(event.widget)
 
-        #self.__min_x = self.__
+        self.__init_click_events(event)
 
         if not self.focus_get() == event.widget:
             if [cell] == self.__selected_cells:
@@ -478,24 +500,44 @@ class Spreadsheet(tk.Frame):
 
     def __control_click_cell(self, event):
         print(event.type + ': <Control-Button-1>')
+        self.__init_click_events(event)
         cell = self.nametowidget(event.widget)
         self.__select_cell(cell, anchor=True, flip=True)
 
     def __shift_click_cell(self, event):
         print(event.type + ': <Shift-Button-1>')
-        self.__deselect_all(but=[self.__anchor_cell])
+        self.__init_click_events(event)
+        self.__deselect_all_cells(but=[self.__anchor_cell])
         self.__select_range(reel = self.nametowidget(event.widget), exclusive = True)
 
     def __control_shift_click_cell(self, event):
         print(event.type + ': <Control-Shift-Button-1>')
+        self.__init_click_events(event)
         self.__select_range(reel = self.nametowidget(event.widget))
 
+
     def __on_cell_mouse_motion(self, event):
-        self.__set_reel_cell(self.winfo_containing(event.x_root, event.y_root))
-        if self.__reel_cell not in self.__cells.values():
+        if not (self.focus_get() == self.containing_frame or self.focus_get() == self.god_entry):
+            return
+
+        x = event.x_root
+        if x < self.__min_x:
+            x = self.__min_x + 1
+        elif x > self.__max_x:
+            x = self.__max_x - 1
+
+        y = event.y_root
+        if y < self.__min_y:
+            y = self.__min_y + 1
+        elif y > self.__max_y:
+            y = self.__max_y - 1
+
+        
+        self.__set_reel_cell(self.winfo_containing(x, y))
+        if self.__reel_cell not in self.__cells_flattened:
             print(str(self.__reel_cell) + ' is out of bounds')
             return
-        if self.__prev_reel_cell in self.__cells.values():
+        if self.__prev_reel_cell in self.__cells_flattened:
             self.__select_range(exclusive=False)
         else:
             print("Coming from out of bounds")
@@ -506,7 +548,8 @@ class Spreadsheet(tk.Frame):
         offset = (0, 0)
         if reel_row > 0:
             offset = (-1, 0)
-        self.__set_reel_cell(self.__cells[tuple(map(add, reel_coords, offset))])
+            row, column = tuple(map(add, reel_coords, offset))
+        self.__set_reel_cell(self.__cells[row][column])
         self.__select_range()
 
     def __shift_down(self, event=None):
@@ -514,7 +557,8 @@ class Spreadsheet(tk.Frame):
         offset = (0, 0)
         if reel_row < self.rows - 1:
             offset = (1, 0)
-        self.__set_reel_cell(self.__cells[tuple(map(add, reel_coords, offset))])
+            row, column = tuple(map(add, reel_coords, offset))
+        self.__set_reel_cell(self.__cells[row][column])
         self.__select_range()
 
     def __shift_left(self, event=None):
@@ -522,7 +566,8 @@ class Spreadsheet(tk.Frame):
         offset = (0, 0)
         if reel_col > 0:
             offset = (0, -1)
-        self.__set_reel_cell(self.__cells[tuple(map(add, reel_coords, offset))])
+            row, column = tuple(map(add, reel_coords, offset))
+        self.__set_reel_cell(self.__cells[row][column])
         self.__select_range()
 
 
@@ -531,14 +576,15 @@ class Spreadsheet(tk.Frame):
         offset = (0, 0)
         if reel_col < self.columns - 1:
             offset = (0, 1)
-        self.__set_reel_cell(self.__cells[tuple(map(add, reel_coords, offset))])
+            row, column = tuple(map(add, reel_coords, offset))
+        self.__set_reel_cell(self.__cells[row][column])
         self.__select_range()
 
     def __up(self, event = None, exclusive = True):
         if self.__anchor_cell:
             anchor_row, anchor_col = self.__get_anchor_coords()
             if anchor_row > 0:
-                self.__select_cell(self.__cells[(anchor_row - 1, anchor_col)], anchor=True, exclusive=exclusive)
+                self.__select_cell(self.__cells[anchor_row - 1][anchor_col], anchor=True, exclusive=exclusive)
             return 'break'
         else:
             self.__set_anchor(self.__cells[(0, 0)])
@@ -546,22 +592,22 @@ class Spreadsheet(tk.Frame):
     def __down(self, event = None, exclusive = True):
         anchor_row, anchor_col = self.__get_anchor_coords()
         if anchor_row < self.rows - 1:
-            self.__select_cell(self.__cells[(anchor_row + 1, anchor_col)], anchor=True, exclusive=exclusive)
+            self.__select_cell(self.__cells[anchor_row + 1][anchor_col], anchor=True, exclusive=exclusive)
         return 'break'
 
     def __left(self, event = None, exclusive = True, wrap=False):
         anchor_row, anchor_col = self.__get_anchor_coords()
         if anchor_col > 0:
-            self.__select_cell(self.__cells[(anchor_row, anchor_col - 1)], anchor=True, exclusive=exclusive)
+            self.__select_cell(self.__cells[anchor_row][anchor_col - 1], anchor=True, exclusive=exclusive)
         elif wrap and anchor_row > 0:
-            self.__select_cell(self.__cells[(anchor_row - 1, self.columns - 1)], anchor=True, exclusive=exclusive)
+            self.__select_cell(self.__cells[anchor_row - 1][self.columns - 1], anchor=True, exclusive=exclusive)
 
     def __right(self, event = None, exclusive = True, wrap=False):
         anchor_row, anchor_col = self.__get_anchor_coords()
         if anchor_col < self.columns - 1:
-            self.__select_cell(self.__cells[(anchor_row, anchor_col + 1)], anchor=True, exclusive=exclusive)
+            self.__select_cell(self.__cells[anchor_row][anchor_col + 1], anchor=True, exclusive=exclusive)
         elif wrap and anchor_row < self.rows - 1:
-            self.__select_cell(self.__cells[(anchor_row + 1, 0)], anchor=True, exclusive=exclusive)
+            self.__select_cell(self.__cells[anchor_row + 1][0], anchor=True, exclusive=exclusive)
 
 
     def __on_column_label_click(self, event, exclusive = True, flip=False):
@@ -571,7 +617,7 @@ class Spreadsheet(tk.Frame):
 
     def __on_column_label_control_click(self, event):
         column = self.__column_labels.index(self.nametowidget(event.widget))
-        column_cells = [self.__cells[(row, column)] for row in range(self.rows)]
+        column_cells = [self.__cells[row][column] for row in range(self.rows)]
         num_cells_selected = sum([column_cell in self.__selected_cells for column_cell in column_cells])
 
         if num_cells_selected > self.rows / 2:
@@ -596,26 +642,37 @@ class Spreadsheet(tk.Frame):
         print('Selecting column ' + str(column))
         self.__select_range(anchor = (0, column), keepanchor = False, reel = (self.rows - 1, column), exclusive = exclusive, flip=True)
 
-    def __on_row_label_click(self, event, exclusive = True):
+    def __on_row_label_click(self, event, exclusive = True, flip=False):
         row = self.__row_labels.index(self.nametowidget(event.widget))
-        self.__select_row(row, exclusive = exclusive)
+        self.__select_row(row, exclusive = exclusive, flip=flip)
         self.__row_x = event.x_root
 
     def __on_row_label_control_click(self, event):
-        self.__on_row_label_click(event, exclusive = False)
+        row = self.__row_labels.index(self.nametowidget(event.widget))
+        row_cells = [self.__cells[row][column] for column in range(self.columns)]
+        num_cells_selected = sum([row_cell in self.__selected_cells for row_cell in row_cells])
+
+        if num_cells_selected > self.columns / 2:
+            self.__deselect_cells(row_cells)
+        else:
+            self.__select_cells(row_cells)
+            self.__set_anchor(row_cells[0])
+
+        self.__row_x = event.x_root
 
     def __on_row_label_shift_click(self, event, exclusive=True):
         (anchor_row, _) = self.__get_anchor_coords()
         event_row = self.__row_labels.index(self.nametowidget(event.widget))
-        self.__select_range(anchor=(anchor_row, 0), reel=(event_row, -1), keepanchor = True, exclusive = exclusive)
+        self.__select_range(anchor=(anchor_row, 0), reel=(event_row, self.columns - 1), keepanchor = True, exclusive = exclusive)
+        self.__row_x = event.x_root
 
     def __on_row_label_mouse_motion(self, event):
         reel_row = self.__row_labels.index(self.winfo_containing(self.__row_x, event.y_root))
         self.__select_range(exclusive=False, keepanchor=True, reel=(reel_row, -1))
 
-    def __select_row(self, row, exclusive = True):
+    def __select_row(self, row, exclusive = True, flip = False):
         print('Selecting row ' + str(row))
-        self.__select_range(anchor = (row, 0), keepanchor = False, reel = (row, -1), exclusive = exclusive)
+        self.__select_range(anchor = (row, 0), keepanchor = False, reel = (row, self.columns - 1), exclusive = exclusive, flip=True)
 
     def __backspace(self, event):
         self.__erase_selected_cell_contents()
@@ -850,6 +907,10 @@ class Spreadsheet(tk.Frame):
 
         self.active_macro_import.run(self)
 
+        print(self.__cells)
+
+        print([cell.formula_value for cell in self.__cells_flattened])
+
     def __import_macro(self, event):
         active_macro_fullpath = filedialog.askopenfilename(title='Create Macro File', initialdir=os.path.join(self.program_paths['index'], 'macros'), filetypes=[('Python File', '*.py')])
 
@@ -876,27 +937,23 @@ class Spreadsheet(tk.Frame):
 
 
 
-
+'''
     ###### Public API
 
     def __iter__(self):
-        return CellsIterator(self)
+        return CellsView(self.__cells, self.rows, self.cols)
 
 
     def __getattr__(self, attr):
         if attr.lower() == 'all' or attr.lower() == 'everything':
-            return CellsIterator(self)
+            return CellsView(self.__cells, self.rows, self.cols)
         elif attr.lower() == 'row':
-            return CellsIterator(self, method=IteratorType.ROWS)
+            return CellsView(self.__cells, self.rows, self.cols, iteration_method=IteratorType.ROWS)
         elif attr.lower() == 'column' or attr.lower() == 'col':
-            return CellsIterator(self, method=IteratorType.COLUMNS)
+            return CellsView(self.__cells, self.rows, self.cols, iteration_method=IteratorType.COLUMNS)
         else:
             raise AttributeError('"' + attr + '" is not an attribute of ' + repr(self) + '\n' + 
                                     'Attributes include all/everything, row, column/col')
-            
-        # All
-        # Row
-        # Column/ Col
 
     def __getitem__(self, input):
         if type(input) == int:
@@ -920,16 +977,48 @@ class IteratorType(Enum):
 
 
 class CellsIterator(object):
-
+    
     # Allow iterating over a random list of coordinates, row/column/cell styles
+    def __init__(self, cells, rows=0, cols=0, iteration_method=IteratorType.CELLS, start=(0, 0), stop=(-1,  -1), step = 1):
+        
 
-    def __init__(self, ss, method=IteratorType.CELLS, start=(0, 0), stop=(-1,  -1), step = 1):
-        self.__method = method
 
-        self.__ss = ss
 
-        start = utils.convert_coordinates_from_negative_1(self.__ss, *start)
-        stop = utils.convert_coordinates_from_negative_1(self.__ss, *stop)        
+
+class CellsView(object):
+    def __init__(self, cells, rows, columns, *cell_refs):
+        self.__all_cells = cells
+        self.__rows = rows
+        self.__cols = columns
+
+        self.__cells = []
+        row = None
+        for cell_ref in cell_refs:
+            cell = None
+            if row or row == 0:
+                column = cell_ref
+                if type(column) != int:
+                    raise ValueError('Cell reference ' + str(cell_ref) + ' needed to be an integer to couple with the previous argument')
+                cell = self.__all_cells[utils.normalize_cell_notation(self.__rows, self.__cols, row, column)]
+                row = None
+            elif type(cell_ref) == Cell:
+                cell = cell_ref
+            elif type(cell_ref) == str or type(cell_ref) == tuple:
+                cell = self.__all_cells[utils.normalize_cell_notation(self.__rows, self.__cols, cell_ref)]
+            elif type(cell_ref) == int:
+                row = cell_ref
+                continue
+            else:
+                raise ValueError('Cell reference ' + str(cell) + ' is illegal')
+
+            self.__cells.append(cell)
+
+    def __iter__(self):
+        self.__iteration_method = iteration_method
+        self.__cells = cells
+
+        start = utils.convert_coordinates_from_negative_1(rows, cols, *start)
+        stop = utils.convert_coordinates_from_negative_1(rows, cols, *stop)        
 
         start_and_stop_correct_ordering = start[0] < stop[0] or (start[0] == stop[0] and start[1] <= stop[1])
         if start_and_stop_correct_ordering:
@@ -944,71 +1033,49 @@ class CellsIterator(object):
         self.__row = self.__start_row
         self.__col = self.__start_col
 
-        self.__rows = self.__ss.rows
-        self.__cols = self.__ss.columns
-
-
-    def __reversed__(self):
-        return CellsIterator(self.__ss, self.__method, start=self.__start, stop = self.__stop, step = -1 * self.__step)
-
-
-    def __getitem__(self, index):
-        if type(index) == int:
-            ci = CellsIterator(self.__ss, self.__method, start=self.__start, stop = self.__stop, step = self.__step)
-            for iteration in range(index):
-                try:
-                    next(ci)
-                except StopIteration:
-                    raise IndexError
-            return next(ci)
-        elif isinstance(index, slice):
-            start = index.start if index.start else 0
-            stop = index.stop if index.stop else -1
-            step = index.step if index.step else 1
-            ci = CellsIterator(self.__ss, self.__method, start=start, stop=stop, step=step)
-        else:
-            raise ValueError('Indexing only supports integer and slice indices; ' + repr(index) + ' is neither of those')
-
+     def __reversed__(self):
+        print('Reversing CellsIterator')
+        return CellsIterator(self.__cells, self.__rows, self.__cols, self.__iteration_method, start=self.__start, stop = self.__stop, step = -1 * self.__step)
 
     def __next__(self):
-        if self.__method == IteratorType.CELLS:
-            cell = CellsView(self.__ss, self.__row, self.__col)
+        if self.__iteration_method == IteratorType.CELLS:
+            cell = CellsView(self.__cells, self.__rows, self.__cols, self.__row, self.__col)
             
             if self.__step < 0:
-                if self.__row < self.__max_row:
+                if self.__row < self.__stop_row:
                     raise StopIteration
-                if self.__row == self.__max_row:
+                elif self.__row == self.__stop_row:
                     if self.__col < self.__stop_col:
                         raise StopIteration
                     else:
                         self.__col -= 1
-                if self.__col > 0:
+                elif self.__col > 0:
                     self.__col -= 1
-                else: # self.__row > self.__max_row and self.__col == self.__cols - 1
+                else: # self.__row > self.__stop_row and self.__col == self.__cols - 1
                     self.__row -= 1
                     self.__col = self.__cols - 1
 
                 return cell
 
             elif self.__step > 0:
-                if self.__row > self.__max_row:
+                if self.__row > self.__stop_row:
                     raise StopIteration
-                if self.__row == self.__max_row:
-                    if self.__col > self.__stop_col:
+                elif self.__row == self.__stop_row:
+                    if self.__col >= self.__stop_col:
                         raise StopIteration
                     else:
                         self.__col += 1
-                if self.__col < self.__cols:
+                elif self.__col < self.__cols - 1:
                     self.__col += 1
-                else: # self.__row < self.__max_row and self.__col == self.__cols - 1
+                else: # self.__row < self.__stop_row and self.__col == self.__cols - 1
                     self.__row += 1
                     self.__col = 0
 
                 return cell
 
-        elif self.__method == IteratorType.ROWS:
+        elif self.__iteration_method == IteratorType.ROWS:
 
-            row = CellsView(self.__ss, *[(self.__row, col) for col in range(self.__cols)])
+            row = CellsView(self.__cells, self.__rows, self.__cols, *[(self.__row, col) for col in range(self.__cols)])
 
             if self.__step > 0:
                 if self.__row > 0:
@@ -1022,9 +1089,9 @@ class CellsIterator(object):
                     raise StopIteration            
 
 
-        elif self.__method == IteratorType.COLUMNS:
+        elif self.__iteration_method == IteratorType.COLUMNS:
 
-            col = CellsView(self.__ss, *[(row, self.__col) for row in range(self.__rows)])
+            col = CellsView(self.__cells, self.__rows, self.__cols, *[(row, self.__col) for row in range(self.__rows)])
 
             if self.__step > 0:
                 if self.__col > 0:
@@ -1037,37 +1104,22 @@ class CellsIterator(object):
                 else:
                     raise StopIteration
 
-    def to_cellsview(self):
-        ci = deepcopy(self)
-        cv = CellsView(self.__ss)
-        for cv_a in ci:
-            cv += cv_a
-        return cv
-
-
-
-
-class CellsView(object):
-    def __init__(self, ss, *cell_refs):
-        self.__ss = ss
-
-        self.__cells = []
-        row = None
-        for cell in cell_refs:
-            if row:
-                column = cell
-                if type(column) != int:
-                    raise ValueError('Cell reference ' + str(cell) + ' needed to be an integer to couple with the previous argument')
-                self.__cells.append(self.__cells[utils.normalize_cell_notation(None, row, column)])
-                row = None
-            elif type(cell) == Cell:
-                self.__cells.append(cell)
-            elif type(cell) == str or type(cell) == tuple:
-                self.__cells.append(self.__cells[utils.normalize_cell_notation(None, cell)])
-            elif type(cell) == int:
-                row = cell
-            else:
-                raise ValueError('Cell reference ' + str(cell) + ' is illegal')
+    def __getitem__(self, index):
+        if type(index) == int:
+            ci = CellsIterator(self.__cells, self.__rows, self.__cols, self.__iteration_method, start=self.__start, stop = self.__stop, step = self.__step)
+            for iteration in range(index):
+                try:
+                    next(ci)
+                except StopIteration:
+                    raise IndexError
+            return next(ci)
+        elif isinstance(index, slice):
+            start = index.start if index.start else 0
+            stop = index.stop if index.stop else -1
+            step = index.step if index.step else 1
+            ci = CellsIterator(self.__cells, self.__rows, self.__cols, self.__iteration_method, start=start, stop=stop, step=step)
+        else:
+            raise ValueError('Indexing only supports integer and slice indices; ' + repr(index) + ' is neither of those')
 
     def indices(self, forcelist=False):
         if not self.__cells:
@@ -1091,15 +1143,25 @@ class CellsView(object):
     def __sub__(self, other):
         cell_refs = list(set(self.keys()) - set(other.keys()))
 
-        return CellsView(self.__ss, *cell_refs)
+        return CellsView(self.__all_cells, self.__rows, self.__cols, *cell_refs)
 
     def __add__(self, other):
         cell_refs = list(set(self.keys()) | set(other.keys()))
 
-        return CellsView(self.__ss, *cell_refs)
+        return CellsView(self.__all_cells, self.__rows, self.__cols, *cell_refs)
+
+    @property
+    def formula_value(self):
+        return self.get_formulas()
+
+    @formula_value.setter
+    def formula_value(self, value):
+        self.set_formula(value)
+    
 
     def set_formula(self, formula):
-        for cell in self.__cells:
+        print('Setting formula!!')
+        for _, cell in enumerate(self.__cells):
             cell.formula = formula
 
     def get_formulas(self, keytype=str):
@@ -1131,6 +1193,6 @@ class CellsView(object):
 
     get_display_values = get_computed_values
 
-
-    def to_list(self):
-        pass
+    def __str__(self):
+        return repr(self.__cells)
+'''

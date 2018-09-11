@@ -51,14 +51,14 @@ def closed_range(a, b):
     return range(start, stop + 1)
 
 
-def convert_coordinates_from_negative_1(spreadsheet, row, column):
+def convert_coordinates_from_negative_1(rows, columns, row, column):
     if row == -1:
-        row = spreadsheet.rows - 1
+        row = rows - 1
     if column == -1:
-        column = spreadsheet.columns - 1
+        column = columns - 1
     return row, column
 
-def normalize_cell_notation(spreadsheet, cell, column=None):
+def normalize_cell_notation(rows, columns, cell, column=None):
     row = cell
 
     if type(cell) == tuple:
@@ -66,7 +66,7 @@ def normalize_cell_notation(spreadsheet, cell, column=None):
     elif type(cell) == str:
         row, column = get_cell_coordinates(cell)
 
-    row, column = convert_coordinates_from_negative_1(spreadsheet, row, column)
+    row, column = convert_coordinates_from_negative_1(rows, columns, row, column)
 
     return row, column
 
