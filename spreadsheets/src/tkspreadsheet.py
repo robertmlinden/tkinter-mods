@@ -503,15 +503,15 @@ class Spreadsheet(tk.Frame):
             return
 
         x = event.x_root
-        if x < self.__min_x:
+        if x <= self.__min_x:
             x = self.__min_x + 1
-        elif x > self.__max_x:
+        elif x >= self.__max_x:
             x = self.__max_x - 1
 
         y = event.y_root
-        if y < self.__min_y:
+        if y <= self.__min_y:
             y = self.__min_y + 1
-        elif y > self.__max_y:
+        elif y >= self.__max_y:
             y = self.__max_y - 1
 
         
