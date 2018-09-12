@@ -881,11 +881,6 @@ class Spreadsheet(tk.Frame):
 
             cell_step = ifnone(index.step, 1)
 
-            print(cell_step)
-
-            print(row_start, row_stop, row_step)
-            print(col_start, col_stop, col_step)
-
             row_range = range(row_start, row_stop, row_step)
             col_range = range(col_start, col_stop, col_step)
             return celllist([self.__cells[row][column] for column in col_range for row in row_range][::cell_step])
@@ -918,6 +913,10 @@ class celllist(list):
         for item in self:
             if isinstance(item, celllist):
                 formulas.append([subitem.formula_value for subitem in item])
+            elif isinstance(item, Cell):
+                formulas.append(item.formula_value)
+            else:
+                raise ValueError(repr(item) + ' is neither of type Cell nor celllist')
         return formulas
 
 
@@ -925,4 +924,7 @@ class celllist(list):
     def formula_value(self, formula_value):
         for item in self:
             item.formula_value = formula_value
+
+    def __sub__(self, other):
+        return [item in self if item not in other]
     
