@@ -34,12 +34,28 @@ class Spreadsheet(tk.Frame):
             self.bind('<Control-BackSpace>', self.__control_backspace)
             self.bind("<Left>", self.__typing_left)
             self.bind('<Right>', self.__typing_right)
-            #self.bind('<KeyRelease>', lambda _ : self._absorb_display())
 
             self.__formula_value = ''
             self.__computed_value = ''
 
             self.__mode = 'formula'
+
+            self.__options = {}
+            self.__options['selected'] = 'dark green'
+
+        def config(self, **options):
+            to_be_popped_keys = []
+            for option_key, option_value in options.items():
+                self.__options[option_key] = option_value
+                if option_key not in self.keys():
+                    to_be_popped_keys.append(option_key)
+                if option_key == 'highlightbackground' and option_value == 'selected':
+                    options[option_key] = self.__options['selected']
+
+            for key in to_be_popped_keys:
+                options.pop(key)
+
+            super().config(**options)
 
         def __update_computed_based_on_formula(self):
             self.computed_value = self.__ss.compute_formula(self.formula_value.strip())
@@ -191,7 +207,7 @@ class Spreadsheet(tk.Frame):
                 print(utils.get_cell_index(row, column))
                 c.grid(row=row+1, column=column+1, stick="nsew")
                 c.config(justify="left", state='disabled', cursor='plus', highlightthickness = 1, highlightbackground = 'ghost white',
-                            disabledbackground='white', highlightcolor = 'goldenrod')
+                            disabledbackground='white', highlightcolor = 'goldenrod', fg='black', disabledforeground='#101010')
                 c.bind("<Button-1>", self.__click_cell)
                 c.bind("<Control-Button-1>", self.__control_click_cell)
                 c.bind("<Shift-Button-1>", self.__shift_click_cell)
@@ -254,30 +270,6 @@ class Spreadsheet(tk.Frame):
     def __flatten_cells(self):
         return [cell for row in self.__cells for cell in row]
 
-    def __get_formatted_value(self, match):
-        row, column = utils.normalize_cell_notation(self.rows, self.columns, match)
-        cell = self.__cells[row][column]
-        return cell.computed_value
-
-    def __cell_convert(self, value):
-        return re.sub(r'\[.*?\]', lambda match: self.__get_formatted_value(match[0]), value)
-
-    def __process_formula(self, formula):
-        if formula and formula[0] == '=' and len(formula) > 1:
-            converted_value = self.__cell_convert(formula[1])
-            return simple_eval(converted_value)
-        else:
-            return formula
-
-    def compute_formula(self, value):
-        try:
-            value = self.__process_formula(value)
-        except SyntaxError:
-            print('There was an error with the syntax')
-            pass
-
-        return value
-
     def __select_all_cells(self, event):
         print('Selecting all cells in the grid!')
         self.__select_range(exclusive=True, anchor='A1', reel=(-1, -1))
@@ -290,7 +282,6 @@ class Spreadsheet(tk.Frame):
         [self.__select_cell(cell, exclusive=False, flip=flip) for cell in cells]
 
     def __select_cell(self, cell, anchor=False, exclusive=False, flip=False):
-
         if exclusive:
             self.__deselect_all_cells()          
 
@@ -306,7 +297,7 @@ class Spreadsheet(tk.Frame):
             self.__set_anchor(cell)
             self.__selected_cells.append(cell)
         else:
-            cell.config(highlightbackground = 'darkgreen')
+            cell.config(highlightbackground = 'selected')
             self.__selected_cells.append(cell)
 
         self.god_entry.focus_set()
@@ -426,7 +417,7 @@ class Spreadsheet(tk.Frame):
         print('Setting cell ' + repr(cell) + ' to anchor')
 
         if self.__anchor_cell in self.__selected_cells:
-            self.__anchor_cell.config(highlightbackground = 'darkgreen')
+            self.__anchor_cell.config(highlightbackground = 'selected')
         self.__anchor_cell = cell
         self.__anchor_cell.config(highlightbackground = 'goldenrod')
 
@@ -690,6 +681,26 @@ class Spreadsheet(tk.Frame):
     def __escape(self, event):
         self.__select_cell(self.__anchor_cell, exclusive=True, anchor=True)
 
+    def __get_formatted_value(self, match):
+        row, column = utils.normalize_cell_notation(self.rows, self.columns, match)
+        cell = self.__cells[row][column]
+        return cell.computed_value
+
+    def __cell_convert(self, value):
+        return re.sub(r'\[.*?\]', lambda match: self.__get_formatted_value(match[0]), value)
+
+    def compute_formula(self, formula):
+        try:
+            if formula and formula[0] == '=' and len(formula) > 1:
+                converted_value = self.__cell_convert(formula[1])
+                return simple_eval(converted_value)
+            else:
+                return formula
+        except SyntaxError:
+            print("Syntax Error")
+
+        return value
+
     def __export_to_csv(self, event=None):
         values = self.get()
 
@@ -910,11 +921,9 @@ class celllist(list):
         for item in self:
             if isinstance(item, celllist):
                 formulas.append([subitem.formula_value for subitem in item])
-            elif isinstance(item, Cell):
+            else: # isinstance(item, _Cell)
                 formulas.append(item.formula_value)
-            else:
-                raise ValueError(repr(item) + ' is neither of type Cell nor celllist')
-        return formulas
+            return formulas
 
 
     @formula_value.setter
@@ -922,6 +931,10 @@ class celllist(list):
         for item in self:
             item.formula_value = formula_value
 
+    def config(self, **options):
+        for item in self:
+            item.config(**options)
+    
     def __sub__(self, other):
         return [item for item in self if item not in other]
     
