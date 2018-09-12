@@ -20,115 +20,112 @@ import os
 
 import csv
 
-class Cell(tk.Entry):
-    def __init__(self, *args, **kw):
-        self.sv = tk.StringVar()
+class Spreadsheet(tk.Frame):
+    class _Cell(tk.Entry):
+        def __init__(self, *args, **kw):
+            self.sv = tk.StringVar()
 
-        kw['textvariable'] = self.sv
-        self.cell_index = kw.pop('cell_index')
-        self.__ss = kw.pop('spreadsheet')
+            kw['textvariable'] = self.sv
+            self.cell_index = kw.pop('cell_index')
+            self.__ss = kw.pop('spreadsheet')
 
-        super().__init__(*args, **kw)
+            super().__init__(*args, **kw)
 
-        self.bind('<Control-BackSpace>', self.__control_backspace)
-        self.bind("<Left>", self.__typing_left)
-        self.bind('<Right>', self.__typing_right)
-        #self.bind('<KeyRelease>', lambda _ : self._absorb_display())
+            self.bind('<Control-BackSpace>', self.__control_backspace)
+            self.bind("<Left>", self.__typing_left)
+            self.bind('<Right>', self.__typing_right)
+            #self.bind('<KeyRelease>', lambda _ : self._absorb_display())
 
-        self.__formula_value = ''
-        self.__computed_value = ''
+            self.__formula_value = ''
+            self.__computed_value = ''
 
-        self.__mode = 'formula'
+            self.__mode = 'formula'
 
-    def __update_computed_based_on_formula(self):
-        print('Updating computed value based on formula')
-        self.computed_value = self.__ss.compute_formula(self.formula_value.strip())
-        print('computed value = ' + str(self.computed_value))
-        self.__align_based_on_entry_type()
-        self.mode('computed')
+        def __update_computed_based_on_formula(self):
+            self.computed_value = self.__ss.compute_formula(self.formula_value.strip())
+            print('computed value = ' + str(self.computed_value))
+            self.__align_based_on_entry_type()
+            self.mode('computed')
 
-    def _absorb_display(self):
-        print('absorb!!')
-        if self.__mode == 'formula':
-            self.formula_value = self.sv.get()
-        else:
-            self.computed_value = self.sv.get()
+        def _absorb_display(self):
+            if self.__mode == 'formula':
+                self.formula_value = self.sv.get()
+            else:
+                self.computed_value = self.sv.get()
 
-    def __control_backspace(self, event):
-        print('Control-backspace')
-        self.erase_cell_contents()
-        self.icursor(0)
-        self.focus_set()
+        def __control_backspace(self, event):
+            print('Control-backspace')
+            self.erase_cell_contents()
+            self.icursor(0)
+            self.focus_set()
 
-    def erase_cell_contents(self):
-        self.formula_value = ''
-        self.computed_value = ''
-        
-
-    def __typing_left(self, event):
-        if self.selection_present():
-            self.icursor(self.index(tk.ANCHOR) + 1)
+        def erase_cell_contents(self):
+            self.formula_value = ''
+            self.computed_value = ''
             
 
-    def __typing_right(self, event = None):
-        if self.selection_present():
-            self.icursor(self.index(tk.ANCHOR) - 1)
+        def __typing_left(self, event):
+            if self.selection_present():
+                self.icursor(self.index(tk.ANCHOR) + 1)
+                
 
-    @property
-    def formula_value(self):
-        return self.__formula_value
-    
+        def __typing_right(self, event = None):
+            if self.selection_present():
+                self.icursor(self.index(tk.ANCHOR) - 1)
 
-    @formula_value.setter
-    def formula_value(self, value):
-        print('Setting formula value')
-        self.__formula_value = value
-        self.__update_computed_based_on_formula()
-        self.__update_display()
-        self.__align_based_on_entry_type()
+        @property
+        def formula_value(self):
+            return self.__formula_value
+        
+
+        @formula_value.setter
+        def formula_value(self, value):
+            print('Setting formula value')
+            self.__formula_value = value
+            self.__update_computed_based_on_formula()
+            self.__update_display()
+            self.__align_based_on_entry_type()
 
 
-    @property
-    def computed_value(self):
-        return self.__computed_value
+        @property
+        def computed_value(self):
+            return self.__computed_value
 
-    @computed_value.setter
-    def computed_value(self, value):
-        self.__computed_value = value
-        self.__update_display()
+        @computed_value.setter
+        def computed_value(self, value):
+            self.__computed_value = value
 
-    
-    @property
-    def coordinates(self):
-        return utils.normalize_cell_notation(self.__ss.rows, self.__ss.columns, self.cell_index)
+        
+        @property
+        def coordinates(self):
+            return utils.normalize_cell_notation(self.__ss.rows, self.__ss.columns, self.cell_index)
 
-    def __set_background(self, color_string):
-        self.config(background=color_string, disabledbackground=color_string)
+        def __set_background(self, color_string):
+            self.config(background=color_string, disabledbackground=color_string)
 
-    def __update_display(self):
-        if self.__mode == 'formula':
-            print('update formula')
-            self.sv.set(self.__formula_value)
-        else:
-            print('update compute')
-            self.sv.set(str(self.__computed_value))
+        def __update_display(self):
+            if self.__mode == 'formula':
+                print('update formula')
+                self.sv.set(self.__formula_value)
+            else:
+                print('update compute')
+                self.sv.set(str(self.__computed_value))
 
-    def mode(self, _mode):
-        self.__mode = _mode
-        self.__update_display()
+        def mode(self, _mode):
+            self.__mode = _mode
+            self.__update_display()
 
-    def __align_based_on_entry_type(self):
-        print('aligning!')
-        try:
-            float(self.computed_value)
-            self.config(justify='right')
-        except ValueError:
-            self.config(justify='left')
+        def __align_based_on_entry_type(self):
+            try:
+                float(self.computed_value)
+                self.config(justify='right')
+            except ValueError:
+                self.config(justify='left')
 
-    def __repr__(self):
-        return self.cell_index
+        def __repr__(self):
+            return self.cell_index
 
-class Spreadsheet(tk.Frame):
+
     def __init__(self, program_paths, parent, rows, columns):
         tk.Frame.__init__(self, parent)
 
@@ -190,7 +187,7 @@ class Spreadsheet(tk.Frame):
         for row in range(self.rows):
             for column in range(self.columns):
                 index = (row, column)
-                c = Cell(self, cell_index = utils.get_cell_index(row, column), spreadsheet = self)
+                c = self._Cell(self, cell_index = utils.get_cell_index(row, column), spreadsheet = self)
                 print(utils.get_cell_index(row, column))
                 c.grid(row=row+1, column=column+1, stick="nsew")
                 c.config(justify="left", state='disabled', cursor='plus', highlightthickness = 1, highlightbackground = 'ghost white',
@@ -215,12 +212,6 @@ class Spreadsheet(tk.Frame):
                 self.__cells[row][column] = c
 
         self.__cells_flattened = self.__flatten_cells()
-
-        # adjust column weights so they all expand equally
-        for column in range(self.columns):
-            self.grid_columnconfigure(column, weight=1)
-        # designate a final, empty row to fill up any extra space
-        #self.grid_rowconfigure(rows, weight=1)
 
         self.gsv = tk.StringVar()
         self.gsv.trace_add('write', lambda idc, idc2, idc3: self.__start_anchor_entry_cursor())
@@ -251,8 +242,6 @@ class Spreadsheet(tk.Frame):
         self.god_entry.bind('<Shift-Return>', self.__shift_enter_key)
         self.god_entry.bind('<Control-Key-d>', self.__control_d)
         self.god_entry.bind('<Control-Key-a>', self.__select_all_cells)
-        self.god_entry.bind('<Control-Key-D>', self.__print_determinant)
-        self.god_entry.bind('<Control-Key-I>', self.__convert_to_inverse)
         self.god_entry.bind('<Control-Key-E>', self.__export_to_csv)
         self.god_entry.bind('<Escape>', self.__escape)
         self.god_entry.bind('<Control-Key-m>', self.__create_macro)
@@ -266,17 +255,17 @@ class Spreadsheet(tk.Frame):
         return [cell for row in self.__cells for cell in row]
 
 
-    def __get_formatted_value(self, match, stringify=False):
+    def __get_formatted_value(self, match):
         row, column = utils.normalize_cell_notation(self.rows, self.columns, match)
         cell = self.__cells[row][column]
-        return "'" + cell.computed_value + "'" if stringify else cell.computed_value
+        return cell.computed_value
 
-    def __cell_convert(self, value, stringify=False):
-        return re.sub(r'\[.*?\]', lambda match: self.__get_formatted_value(match[0], stringify), value)
+    def __cell_convert(self, value):
+        return re.sub(r'\[.*?\]', lambda match: self.__get_formatted_value(match[0]), value)
 
-    def __process_formula(self, formula, number_based = False):
+    def __process_formula(self, formula):
         if formula and formula[0] == '=' and len(formula) > 1:
-            converted_value = self.__cell_convert(formula[1:], not number_based)
+            converted_value = self.__cell_convert(formula[1])
             return simple_eval(converted_value)
         else:
             return formula
@@ -284,9 +273,8 @@ class Spreadsheet(tk.Frame):
     def compute_formula(self, value):
         try:
             value = self.__process_formula(value)
-            print('Expression parsed')
         except SyntaxError:
-            # Tell the user their syntax was off
+            print('There was an error with the syntax')
             pass
 
         return value
@@ -297,14 +285,12 @@ class Spreadsheet(tk.Frame):
         return 'break'
 
     def __select_cells(self, cells, exclusive=False, flip=False):
-        print('Selecting cells ' + str([cell.cell_index for cell in cells]))
         if exclusive:
             self.__deselect_all_cells()
         
         [self.__select_cell(cell, exclusive=False, flip=flip) for cell in cells]
 
     def __select_cell(self, cell, anchor=False, exclusive=False, flip=False):
-        print('Selecting cell ' + repr(cell))
 
         if exclusive:
             self.__deselect_all_cells()          
@@ -326,9 +312,6 @@ class Spreadsheet(tk.Frame):
 
         self.god_entry.focus_set()
 
-        print('self.__selected_cells now is ' + str(self.__selected_cells))
-
-
 
     def __deselect_all_cells(self, but=[]):
         print('deselect all')
@@ -336,11 +319,9 @@ class Spreadsheet(tk.Frame):
         self.__deselect_cells([cell for cell in self.__selected_cells if cell not in but])
 
     def __deselect_cells(self, cells):
-        print('Deselecting cells ' + repr(cells))
         [self.__deselect_cell(cell) for cell in cells]
 
     def __deselect_cell(self, cell):
-        print('deselect cell : ' + repr(cell))
         try:
             self.__selected_cells.remove(cell)
             cell.config(highlightbackground = 'ghost white')
@@ -367,7 +348,7 @@ class Spreadsheet(tk.Frame):
                 old.config(highlightbackground = hlbg)
 
     def __select_range(self, keepanchor = True, exclusive = False, flip=False, anchor = None, reel = None):
-        print('Selecting ' + ('exclusive' if exclusive else '') +  ' range: ', end='')
+        #print('Selecting ' + ('exclusive' if exclusive else '') +  ' range: ', end='')
 
         if exclusive:
             but = [self.__anchor_cell] if keepanchor else []
@@ -446,7 +427,7 @@ class Spreadsheet(tk.Frame):
             self.__anchor_cell = None
             return
 
-        if type(cell) != Cell:
+        if type(cell) != self._Cell:
             row, column = utils.normalize_cell_notation(self.rows, self.columns, cell, col)
             cell = self.__cells[row][column]
 
@@ -467,13 +448,14 @@ class Spreadsheet(tk.Frame):
             self.__selected_cells.append(cell)
 
     def __set_reel_cell(self, cell, col=None):
-        if type(cell) != Cell:
+        if type(cell) != self._Cell:
             row, column = utils.normalize_cell_notation(self.rows, self.columns, cell, col)
-            cell = self.__cells[row][column]
+            if type(row) == int and type(column) == int:
+                cell = self.__cells[row][column]
 
         self.__reel_cell, self.__prev_reel_cell = cell, self.__reel_cell
 
-        print('Reel cell is now ' + repr(self.__reel_cell))
+        #print('Reel cell is now ' + repr(self.__reel_cell))
 
     def __init_click_events(self, event):
         self.__min_x = self.__cells[0][0].winfo_rootx()
@@ -714,59 +696,6 @@ class Spreadsheet(tk.Frame):
     def __escape(self, event):
         self.__select_cell(self.__anchor_cell, exclusive=True, anchor=True)
 
-    def __convert_to_inverse(self, event=None):
-        sv00 = self.__cells[(0, 0)].sv
-        sv01 = self.__cells[(0, 1)].sv
-        sv02 = self.__cells[(0, 2)].sv
-        sv10 = self.__cells[(1, 0)].sv
-        sv11 = self.__cells[(1, 1)].sv
-        sv12 = self.__cells[(1, 2)].sv
-        sv20 = self.__cells[(2, 0)].sv
-        sv21 = self.__cells[(2, 1)].sv
-        sv22 = self.__cells[(2, 2)].sv
-
-        determinant = self.__calculate_determinant()
-
-        result00 = float(a00.get()) / determinant
-        result01 = float(a01.get()) / determinant
-        result02 = float(a02.get()) / determinant
-        result10 = float(a10.get()) / determinant
-        result11 = float(a11.get()) / determinant
-        result12 = float(a12.get()) / determinant
-        result20 = float(a20.get()) / determinant
-        result21 = float(a21.get()) / determinant
-        result22 = float(a22.get()) / determinant
-
-        if int(result00) == result00: result00 = int(result00)
-        if int(result01) == result01: result01 = int(result01)
-        if int(result02) == result02: result02 = int(result02)
-        if int(result10) == result10: result10 = int(result10)
-        if int(result11) == result11: result11 = int(result11)
-        if int(result12) == result12: result12 = int(result12)
-        if int(result20) == result20: result20 = int(result20)
-        if int(result21) == result21: result21 = int(result21)
-        if int(result22) == result22: result22 = int(result22)
-
-        sv00.set(result00)
-        sv01.set(result01)
-        sv02.set(result02)
-        sv10.set(result10)
-        sv11.set(result11)
-        sv12.set(result12)
-        sv20.set(result20)
-        sv21.set(result21)
-        sv22.set(result22)
-
-        a00.update()
-        a01.update()
-        a02.update()
-        a10.update()
-        a11.update()
-        a12.update()
-        a20.update()
-        a21.update()
-        a22.update()
-
     def __export_to_csv(self, event=None):
         values = self.get()
 
@@ -804,36 +733,6 @@ class Spreadsheet(tk.Frame):
             
 
         self.__guarantee_widget_focus = None
-
-
-    def __print_determinant(self, event):
-        message = None
-        try:
-            determinant = self.__calculate_determinant()
-            message = ('Determinant Calculation', str(determinant))
-        except (TypeError, ValueError):
-            message = ('Try again', 'Not all entries are integers')
-        
-        messagebox.showinfo(*message)
-
-    # Assume 3x3 from (0, 0)
-    def __calculate_determinant(self, event):
-        a00 = float(self.__cells[(0, 0)].get().strip())
-        a01 = float(self.__cells[(0, 1)].get().strip())
-        a02 = float(self.__cells[(0, 2)].get().strip())
-        a10 = float(self.__cells[(1, 0)].get().strip())
-        a11 = float(self.__cells[(1, 1)].get().strip())
-        a12 = float(self.__cells[(1, 2)].get().strip())
-        a20 = float(self.__cells[(2, 0)].get().strip())
-        a21 = float(self.__cells[(2, 1)].get().strip())
-        a22 = float(self.__cells[(2, 2)].get().strip())
-        
-        d1 = a11 * a22 - a21 * a12
-        d2 = a10 * a22 - a20 * a22
-        d3 = a10 * a21 - a20 * a11
-        d = a00 * d1 - a01 * d2 + a02 * d3
-
-        return d
 
     def __on_god_entry_focus_out(self, event):
         if self.__guarantee_focus:
@@ -907,10 +806,6 @@ class Spreadsheet(tk.Frame):
 
         self.active_macro_import.run(self)
 
-        print(self.__cells)
-
-        print([cell.formula_value for cell in self.__cells_flattened])
-
     def __import_macro(self, event):
         active_macro_fullpath = filedialog.askopenfilename(title='Create Macro File', initialdir=os.path.join(self.program_paths['index'], 'macros'), filetypes=[('Python File', '*.py')])
 
@@ -936,263 +831,98 @@ class Spreadsheet(tk.Frame):
         self.god_entry.bind('<Control-Key-r>', self.__run_macro)
 
 
-
-'''
     ###### Public API
-
-    def __iter__(self):
-        return CellsView(self.__cells, self.rows, self.cols)
-
 
     def __getattr__(self, attr):
         if attr.lower() == 'all' or attr.lower() == 'everything':
-            return CellsView(self.__cells, self.rows, self.cols)
+            print('all')
+            return celllist([self.__cells[row][column] for column in range(self.columns) for row in range(self.rows)])
+
         elif attr.lower() == 'row':
-            return CellsView(self.__cells, self.rows, self.cols, iteration_method=IteratorType.ROWS)
+            print('row')
+            return cellList([celllist([self.__cells[row][column] for column in range(self.columns)]) for row in range(self.rows)])
         elif attr.lower() == 'column' or attr.lower() == 'col':
-            return CellsView(self.__cells, self.rows, self.cols, iteration_method=IteratorType.COLUMNS)
+            print('col')
+            return celllist([celllist([self.__cells[row][column] for row in range(self.rows)]) for column in range(self.columns)])
         else:
             raise AttributeError('"' + attr + '" is not an attribute of ' + repr(self) + '\n' + 
-                                    'Attributes include all/everything, row, column/col')
-
-    def __getitem__(self, input):
-        if type(input) == int:
-            pass
-        elif type(input) == slice:
-            pass
-
-
-
-
-
-
-
-from enum import Enum
-class IteratorType(Enum):
-    CELLS = 0
-    ROWS = 1
-    COLUMNS = 2
-    COLS = 2
-    FREE_FORM = 3
-
-
-class CellsIterator(object):
-    
-    # Allow iterating over a random list of coordinates, row/column/cell styles
-    def __init__(self, cells, rows=0, cols=0, iteration_method=IteratorType.CELLS, start=(0, 0), stop=(-1,  -1), step = 1):
-        
-
-
-
-
-class CellsView(object):
-    def __init__(self, cells, rows, columns, *cell_refs):
-        self.__all_cells = cells
-        self.__rows = rows
-        self.__cols = columns
-
-        self.__cells = []
-        row = None
-        for cell_ref in cell_refs:
-            cell = None
-            if row or row == 0:
-                column = cell_ref
-                if type(column) != int:
-                    raise ValueError('Cell reference ' + str(cell_ref) + ' needed to be an integer to couple with the previous argument')
-                cell = self.__all_cells[utils.normalize_cell_notation(self.__rows, self.__cols, row, column)]
-                row = None
-            elif type(cell_ref) == Cell:
-                cell = cell_ref
-            elif type(cell_ref) == str or type(cell_ref) == tuple:
-                cell = self.__all_cells[utils.normalize_cell_notation(self.__rows, self.__cols, cell_ref)]
-            elif type(cell_ref) == int:
-                row = cell_ref
-                continue
-            else:
-                raise ValueError('Cell reference ' + str(cell) + ' is illegal')
-
-            self.__cells.append(cell)
-
-    def __iter__(self):
-        self.__iteration_method = iteration_method
-        self.__cells = cells
-
-        start = utils.convert_coordinates_from_negative_1(rows, cols, *start)
-        stop = utils.convert_coordinates_from_negative_1(rows, cols, *stop)        
-
-        start_and_stop_correct_ordering = start[0] < stop[0] or (start[0] == stop[0] and start[1] <= stop[1])
-        if start_and_stop_correct_ordering:
-            self.__start = self.__start_row, self.__start_col = start
-            self.__stop = self.__stop_row, self.__stop_col = stop
-        else:
-            self.__start = self.__start_row, self.__start_col = stop
-            self.__stop = self.__stop_row, self.__stop_col = start
-
-        self.__step = step
-
-        self.__row = self.__start_row
-        self.__col = self.__start_col
-
-     def __reversed__(self):
-        print('Reversing CellsIterator')
-        return CellsIterator(self.__cells, self.__rows, self.__cols, self.__iteration_method, start=self.__start, stop = self.__stop, step = -1 * self.__step)
-
-    def __next__(self):
-        if self.__iteration_method == IteratorType.CELLS:
-            cell = CellsView(self.__cells, self.__rows, self.__cols, self.__row, self.__col)
-            
-            if self.__step < 0:
-                if self.__row < self.__stop_row:
-                    raise StopIteration
-                elif self.__row == self.__stop_row:
-                    if self.__col < self.__stop_col:
-                        raise StopIteration
-                    else:
-                        self.__col -= 1
-                elif self.__col > 0:
-                    self.__col -= 1
-                else: # self.__row > self.__stop_row and self.__col == self.__cols - 1
-                    self.__row -= 1
-                    self.__col = self.__cols - 1
-
-                return cell
-
-            elif self.__step > 0:
-                if self.__row > self.__stop_row:
-                    raise StopIteration
-                elif self.__row == self.__stop_row:
-                    if self.__col >= self.__stop_col:
-                        raise StopIteration
-                    else:
-                        self.__col += 1
-                elif self.__col < self.__cols - 1:
-                    self.__col += 1
-                else: # self.__row < self.__stop_row and self.__col == self.__cols - 1
-                    self.__row += 1
-                    self.__col = 0
-
-                return cell
-
-        elif self.__iteration_method == IteratorType.ROWS:
-
-            row = CellsView(self.__cells, self.__rows, self.__cols, *[(self.__row, col) for col in range(self.__cols)])
-
-            if self.__step > 0:
-                if self.__row > 0:
-                    self.__row -= 1
-                else:
-                    raise StopIteration
-            elif self.__step < 0:
-                if self.__row < self.__rows - 1:
-                    self.__row += 1
-                else:
-                    raise StopIteration            
-
-
-        elif self.__iteration_method == IteratorType.COLUMNS:
-
-            col = CellsView(self.__cells, self.__rows, self.__cols, *[(row, self.__col) for row in range(self.__rows)])
-
-            if self.__step > 0:
-                if self.__col > 0:
-                    self.__col -= 1
-                else:
-                    raise StopIteration
-            elif self.__step < 0:
-                if self.__col < self.__cols - 1:
-                    self.__col += 1
-                else:
-                    raise StopIteration
+                                    'Attributes include all/everything, row, column/col')   
 
     def __getitem__(self, index):
-        if type(index) == int:
-            ci = CellsIterator(self.__cells, self.__rows, self.__cols, self.__iteration_method, start=self.__start, stop = self.__stop, step = self.__step)
-            for iteration in range(index):
-                try:
-                    next(ci)
-                except StopIteration:
-                    raise IndexError
-            return next(ci)
-        elif isinstance(index, slice):
-            start = index.start if index.start else 0
-            stop = index.stop if index.stop else -1
-            step = index.step if index.step else 1
-            ci = CellsIterator(self.__cells, self.__rows, self.__cols, self.__iteration_method, start=start, stop=stop, step=step)
-        else:
-            raise ValueError('Indexing only supports integer and slice indices; ' + repr(index) + ' is neither of those')
+        if isinstance(index, slice):
+            ifnone = lambda a, b: b if a is None else a
 
-    def indices(self, forcelist=False):
-        if not self.__cells:
-            return None
+            row_start = 0
+            row_stop = self.rows
 
-        elif len(self.__cells) == 1 and forcelist == False:
-            return self.__cells[0].cell_index
+            col_start = 0
+            col_stop = self.columns
 
-        else:
-            return [cell.cell_index for cell in self.__cells]
+            if index.start:
+                print('start')
+                if type(index.start) == int:
+                    row_start = index.start
+                elif type(index.start) == str:
+                    row_start, col_start = utils.get_cell_coordinates(index.start)
+                elif type(index.start) == tuple:
+                    row_start, col_start = index
 
-    index = indices
+            if index.stop:
+                print('stop')
+                if type(index.stop) == int:
+                    row_stop = index.stop
+                elif type(index.stop) == str:
+                    row_stop, col_stop = utils.get_cell_coordinates(index.stop)
+                elif type(index.stop) == tuple:
+                    row_stop, col_stop = index
+
+            row_step = 1 if row_start < row_stop else -1
+            col_step = 1 if col_start < col_stop else -1
+
+            cell_step = ifnone(index.step, 1)
+
+            print(cell_step)
+
+            print(row_start, row_stop, row_step)
+            print(col_start, col_stop, col_step)
+
+            row_range = range(row_start, row_stop, row_step)
+            col_range = range(col_start, col_stop, col_step)
+            return celllist([self.__cells[row][column] for column in col_range for row in row_range][::cell_step])
+
+        elif isinstance(index, str):
+            if index.isalpha():
+               column = utils.get_column_letters(index)
+               return celllist([self.__cells[row][column] for row in range(self.rows)])
+            elif index.isnumeric():
+                row = int(index) - 1
+                return celllist([self.__cells[row][column] for column in range(self.columns)])
+            else:
+                row, column = utils.normalize_cell_notation(self.rows, self.columns, index)
+                return self.__cells[row][column]
+
+        elif isinstance(index, tuple):
+            row, column = index
+            return celllist(self.__cells[row][column])
+
+        elif isinstance(index, int):
+            row = index
+            return celllist([self.__cells[row][column] for column in range(self.columns)])
 
 
-    def keys(self):
-        _keys = []
-        for cell in self.__cells:
-            _keys.append(cell.cell_index)
-        return _keys
-
-    def __sub__(self, other):
-        cell_refs = list(set(self.keys()) - set(other.keys()))
-
-        return CellsView(self.__all_cells, self.__rows, self.__cols, *cell_refs)
-
-    def __add__(self, other):
-        cell_refs = list(set(self.keys()) | set(other.keys()))
-
-        return CellsView(self.__all_cells, self.__rows, self.__cols, *cell_refs)
+class celllist(list):
 
     @property
     def formula_value(self):
-        return self.get_formulas()
-
-    @formula_value.setter
-    def formula_value(self, value):
-        self.set_formula(value)
-    
-
-    def set_formula(self, formula):
-        print('Setting formula!!')
-        for _, cell in enumerate(self.__cells):
-            cell.formula = formula
-
-    def get_formulas(self, keytype=str):
-        formulas = {}
-        for cell in self.__cells:
-            key = None
-            if keytype == str:
-                key = cell.cell_index
-            elif keytype == tuple:
-                key = cell.coordinates
-            else:
-                key = cell
-            formulas[key] = cell.formula_value
+        formulas = []
+        for item in self:
+            if isinstance(item, celllist):
+                formulas.append([subitem.formula_value for subitem in item])
         return formulas
 
+
+    @formula_value.setter
+    def formula_value(self, formula_value):
+        for item in self:
+            item.formula_value = formula_value
     
-    def get_computed_values(self, keytype=str):
-        computed_values = {}
-        for cell in self.__cells:
-            key = None
-            if keytype == str:
-                key = cell.cell_index
-            elif keytype == tuple:
-                key = cell.coordinates
-            else:
-                key = cell
-            computed_values[key] = cell.computed_value
-        return computed_values
-
-    get_display_values = get_computed_values
-
-    def __str__(self):
-        return repr(self.__cells)
-'''
