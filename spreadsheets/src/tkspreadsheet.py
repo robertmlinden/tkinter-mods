@@ -844,6 +844,9 @@ class Spreadsheet(tk.Frame):
         elif attr.lower() == 'column' or attr.lower() == 'col':
             print('col')
             return celllist([celllist([self.__cells[row][column] for row in range(self.rows)]) for column in range(self.columns)])
+        elif attr.lower() == 'selected':
+            print('selected')
+            return celllist(self.__selected_cells)
         else:
             raise AttributeError('"' + attr + '" is not an attribute of ' + repr(self) + '\n' + 
                                     'Attributes include all/everything, row, column/col')   
@@ -926,5 +929,17 @@ class celllist(list):
             item.formula_value = formula_value
 
     def __sub__(self, other):
-        return [item in self if item not in other]
+        return [item for item in self if item not in other]
     
+    def __getitem__(self, index):
+        if type(index) == str:
+            index = utils.get_column_index(index)
+
+        elif type(index) == slice:
+            start = utils.get_column_index(index.start) if index.start else index.start
+            stop = utils.get_column_index(index.stop) if index.stop else index.stop
+            
+            slce = slice(start, stop, index.step)
+            return super().__getitem__(slce)
+
+        return super().__getitem__(index)
