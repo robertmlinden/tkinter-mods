@@ -21,11 +21,8 @@ import os
 import csv
 
 class Spreadsheet(tk.Frame):
-    class _Cell(tk.Entry):
+    class _Cell(tk.Text):
         def __init__(self, *args, **kw):
-            self.sv = tk.StringVar()
-
-            kw['textvariable'] = self.sv
             self.cell_index = kw.pop('cell_index')
             self.__ss = kw.pop('spreadsheet')
 
@@ -68,18 +65,16 @@ class Spreadsheet(tk.Frame):
             self.computed_value = self.__ss.compute_formula(self.formula_value.strip())
             print('computed value = ' + str(self.computed_value))
             self.__align_based_on_entry_type()
-            self.mode('computed')
 
         def _absorb_display(self):
             if self.__mode == 'formula':
-                self.formula_value = self.sv.get()
+                self.formula_value = self.get('1.0', tk.END)
             else:
-                self.computed_value = self.sv.get()
+                self.computed_value = self.get('1.0', tk.END)
 
         def __control_backspace(self, event):
             print('Control-backspace')
             self.erase_cell_contents()
-            self.icursor(0)
             self.focus_set()
 
         def erase_cell_contents(self):
@@ -129,14 +124,20 @@ class Spreadsheet(tk.Frame):
         def __update_display(self):
             if self.__mode == 'formula':
                 print('update formula')
-                self.sv.set(self.__formula_value)
+                self.delete('1.0', tk.END)
+                print('formula value ' + str(self.__formula_value))
+                self.insert(tk.INSERT, self.__formula_value)
+                print('now is ' + self.get('1.0', tk.END))
             else:
                 print('update compute')
-                self.sv.set(str(self.__computed_value))
+                self.delete('1.0', tk.END)
+                self.insert('1.0', self.__computed_value)
 
-        def mode(self, _mode):
-            self.__mode = _mode
-            self.__update_display()
+        def mode(self, _mode = None):
+            if _mode:
+                self.__mode = _mode
+                self.__update_display()
+            return self.__mode
 
         def __align_based_on_entry_type(self):
             try:
@@ -214,7 +215,7 @@ class Spreadsheet(tk.Frame):
                 print(utils.get_cell_index(row, column))
                 c.grid(row=row+1, column=column+1, stick="nsew")
                 c.config(justify="left", state='disabled', cursor='plus', highlightthickness = 1, highlightbackground = 'ghost white',
-                            disabledbackground='white', highlightcolor = 'anchor', fg='black', disabledforeground='#101010')
+                            disabledbackground='white', highlightcolor = 'anchor', fg='black', disabledforeground='#101010', width=20, height=1)
                 c.bind("<Button-1>", self.__click_cell)
                 c.bind("<Control-Button-1>", self.__control_click_cell)
                 c.bind("<Shift-Button-1>", self.__shift_click_cell)
@@ -466,6 +467,8 @@ class Spreadsheet(tk.Frame):
                 self.__select_cell(cell, anchor=True, exclusive=True)
                 self.god_entry.focus_set()
 
+        return 'break'
+
     def __control_click_cell(self, event):
         print(event.type + ': <Control-Button-1>')
         self.__init_click_events(event)
@@ -510,6 +513,8 @@ class Spreadsheet(tk.Frame):
         else:
             print("Coming from out of bounds")
             self.__select_range(exclusive = True)
+
+        return 'break'
 
     def __shift_up(self, event=None): # exclusive for control-shift
         reel_coords = reel_row, reel_col = self.__get_reel_coords()
@@ -727,9 +732,10 @@ class Spreadsheet(tk.Frame):
 
     def __on_cell_focus_in(self, event):
         cell = self.nametowidget(event.widget)
-        cell.mode('formula')
+        print('mode is now ' + cell.mode('formula'))
         cell.config(state='normal', cursor='xterm')
-        cell.icursor(tk.END)
+        cell.insert(tk.END, '')
+        cell.see(tk.END)
 
     def __on_exit_cell_typing(self, event=None):
         if self.__guarantee_widget_focus:
