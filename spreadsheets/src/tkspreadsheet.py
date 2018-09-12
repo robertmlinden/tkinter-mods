@@ -42,15 +42,22 @@ class Spreadsheet(tk.Frame):
 
             self.__options = {}
             self.__options['selected'] = 'dark green'
+            self.__options['anchor'] = 'goldenrod'
+
+        def keys(self, *args, **kw):
+            all_keys = super().keys()
+            all_keys.extend(list(self.__options.keys()))
+            return sorted(all_keys)
 
         def config(self, **options):
             to_be_popped_keys = []
             for option_key, option_value in options.items():
                 self.__options[option_key] = option_value
-                if option_key not in self.keys():
+                if option_key not in super().keys():
                     to_be_popped_keys.append(option_key)
-                if option_key == 'highlightbackground' and option_value == 'selected':
-                    options[option_key] = self.__options['selected']
+                if option_key == 'highlightbackground' or option_key == 'highlightcolor':
+                    if option_value == 'selected' or option_value == 'anchor':
+                        options[option_key] = self.__options[option_value]
 
             for key in to_be_popped_keys:
                 options.pop(key)
@@ -207,7 +214,7 @@ class Spreadsheet(tk.Frame):
                 print(utils.get_cell_index(row, column))
                 c.grid(row=row+1, column=column+1, stick="nsew")
                 c.config(justify="left", state='disabled', cursor='plus', highlightthickness = 1, highlightbackground = 'ghost white',
-                            disabledbackground='white', highlightcolor = 'goldenrod', fg='black', disabledforeground='#101010')
+                            disabledbackground='white', highlightcolor = 'anchor', fg='black', disabledforeground='#101010')
                 c.bind("<Button-1>", self.__click_cell)
                 c.bind("<Control-Button-1>", self.__control_click_cell)
                 c.bind("<Shift-Button-1>", self.__shift_click_cell)
@@ -419,7 +426,7 @@ class Spreadsheet(tk.Frame):
         if self.__anchor_cell in self.__selected_cells:
             self.__anchor_cell.config(highlightbackground = 'selected')
         self.__anchor_cell = cell
-        self.__anchor_cell.config(highlightbackground = 'goldenrod')
+        self.__anchor_cell.config(highlightbackground = 'anchor')
 
         self.__set_reel_cell(cell)
 
