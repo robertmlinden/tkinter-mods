@@ -335,17 +335,6 @@ class Spreadsheet(tk.Frame):
             print('no selected cells')
             self.containing_frame.focus_set()
 
-
-    def __restore_borders(self, new, method='normal'):
-        print('restore borders')
-        hlbg = 'darkgreen' if method == 'selected' else 'ghost white'
-
-        if type(new) != list:
-            new = [new]
-        for old in self.__selected_cells:
-            if old not in new:
-                old.config(highlightbackground = hlbg)
-
     def __select_range(self, keepanchor = True, exclusive = False, flip=False, anchor = None, reel = None):
         #print('Selecting ' + ('exclusive' if exclusive else '') +  ' range: ', end='')
 
