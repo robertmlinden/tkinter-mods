@@ -461,7 +461,7 @@ class Spreadsheet(tk.Frame):
         self.__min_x = self.__cells[0][0].winfo_rootx()
         self.__min_y = self.__cells[0][0].winfo_rooty()
 
-        row, column = utils.convert_coordinates_from_negative_1(self.rows, self.cols, -1, -1)
+        row, column = utils.convert_coordinates_from_negative(self.rows, self.cols, -1, -1)
         last_cell = self.__cells[row][column]
 
         self.__max_x = last_cell.winfo_rootx() + last_cell.winfo_width()
@@ -617,7 +617,10 @@ class Spreadsheet(tk.Frame):
         self.__column_y = event.y_root
 
     def __on_column_label_mouse_motion(self, event):
-        reel_col = self.__column_labels.index(self.winfo_containing(event.x_root, self.__column_y))
+        column_label = self.winfo_containing(event.x_root, self.__column_y)
+        if column_label not in self.__column_labels:
+            return
+        reel_col = self.__column_labels.index(column_label)
         self.__select_range(exclusive=False, keepanchor=True, reel=(-1, reel_col))
 
     def __select_column(self, column, exclusive = True, flip = False):
@@ -649,7 +652,10 @@ class Spreadsheet(tk.Frame):
         self.__row_x = event.x_root
 
     def __on_row_label_mouse_motion(self, event):
-        reel_row = self.__row_labels.index(self.winfo_containing(self.__row_x, event.y_root))
+        row_label = self.winfo_containing(self.__row_x, event.y_root)
+        if row_label not in self.__row_labels:
+            return
+        reel_row = self.__row_labels.index(row_label)
         self.__select_range(exclusive=False, keepanchor=True, reel=(reel_row, -1))
 
     def __select_row(self, row, exclusive = True, flip = False):

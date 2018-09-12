@@ -51,11 +51,12 @@ def closed_range(a, b):
     return range(start, stop + 1)
 
 
-def convert_coordinates_from_negative_1(rows, columns, row, column):
-    if row == -1:
-        row = rows - 1
-    if column == -1:
-        column = columns - 1
+def convert_coordinates_from_negative(rows, columns, row, column):
+    if row < 0:
+        row = rows + row
+    if column < 0:
+        column = columns + column
+    print(row, column)
     return row, column
 
 def normalize_cell_notation(rows, columns, cell, column=None):
@@ -66,7 +67,7 @@ def normalize_cell_notation(rows, columns, cell, column=None):
     elif type(cell) == str:
         row, column = get_cell_coordinates(cell)
 
-    row, column = convert_coordinates_from_negative_1(rows, columns, row, column)
+    row, column = convert_coordinates_from_negative(rows, columns, row, column)
 
     return row, column
 
