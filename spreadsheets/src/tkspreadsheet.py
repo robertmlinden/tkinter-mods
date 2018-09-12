@@ -254,7 +254,6 @@ class Spreadsheet(tk.Frame):
     def __flatten_cells(self):
         return [cell for row in self.__cells for cell in row]
 
-
     def __get_formatted_value(self, match):
         row, column = utils.normalize_cell_notation(self.rows, self.columns, match)
         cell = self.__cells[row][column]
