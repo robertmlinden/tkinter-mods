@@ -125,6 +125,14 @@ class Spreadsheet(tk.Frame):
         def coordinates(self):
             return utils.normalize_cell_notation(self.__ss.rows, self.__ss.columns, self.cell_index)
 
+        def __getattr__(self, attr):
+            a = attr.lower()
+
+            if a == 'row':
+                return self.coordinates[0]
+            elif a == 'col' or a == 'column':
+                return self.coordinates[1]
+
         def __set_background(self, color_string):
             self.config(background=color_string, disabledbackground=color_string)
 
@@ -935,10 +943,19 @@ class Spreadsheet(tk.Frame):
             if type(xi) == self._Cell:
                 x[idx] = xi.computed_value
                 try:
-                    float(x[idx])
+                    x[idx] = float(x[idx])
                 except ValueError:
-                    raise ValueError('x element at index ' + str(idx) '')
-        plt.plot(x, y, 'ro')
+                    raise ValueError('x element at index ' + str(idx) + ' is not a number')
+        for idx, yi in enumerate(y):
+            if type(yi) == self._Cell:
+                y[idx] = yi.computed_value
+                try:
+                    y[idx] = float(y[idx])
+                except ValueError:
+                    raise ValueError('y element at index ' + str(idx) + ' is not a number')
+        x = list(x)
+        y = list(y)
+        plt.plot(x, y)
         plt.xlabel(str(xlabel))
         plt.ylabel(str(ylabel))
         if not title:
@@ -1001,22 +1018,24 @@ class celllist(elist):
             index = utils.get_column_index(index)
 
         elif type(index) == slice:
-            start = utils.get_column_index(index.start) if index.start else index.start
-            stop = utils.get_column_index(index.stop) if index.stop else index.stop
+            start = utils.get_column_index(index.start) if isinstance(index.start, str) else index.start if index.start else index.start
+            stop = utils.get_column_index(index.stop) if isinstance(index.stop, str) else index.stop if index.stop else index.stop
             
             slce = slice(start, stop, index.step)
-            return super().__getitem__(slce)
+            return celllist(super().__getitem__(slce))
 
         return super().__getitem__(index)
 
 
     def __getattr__(self, attr):
+        print('getattr')
         a = attr.lower()
 
         if a == 'col' or a == 'column':
             return [item[a] if isinstance(item, list) else item.coordinates[1] for item in self]
         elif a == 'row':
-            return [item[a] if isinstance(item, list) else item.coordinates[0] for item in self]
+            print(repr(self))
+            return [item.__getattr__(attr) if isinstance(item, list) else item.coordinates[0] for item in self]
 
 class formulalist(elist):
 
