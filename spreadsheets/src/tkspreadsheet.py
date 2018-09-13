@@ -65,7 +65,7 @@ class Spreadsheet(tk.Frame):
             super().config(**options)
 
         def __update_computed_based_on_formula(self):
-            self.computed_value = self.__ss.compute_formula(self.formula_value.strip())
+            self.computed_value = self.__ss.compute_formula(str(self.formula_value).strip())
             print('computed value = ' + str(self.computed_value))
             self.__align_based_on_entry_type()
             self.mode('computed')
@@ -846,17 +846,17 @@ class Spreadsheet(tk.Frame):
     ###### Public API
 
     def __getattr__(self, attr):
-        if attr.lower() == 'all' or attr.lower() == 'everything':
+        a = attr.lower()
+        if a == 'all' or a == 'everything':
             print('all')
             return celllist([self.__cells[row][column] for column in range(self.columns) for row in range(self.rows)])
-
-        elif attr.lower() == 'row':
+        elif a == 'row':
             print('row')
-            return cellList([celllist([self.__cells[row][column] for column in range(self.columns)]) for row in range(self.rows)])
-        elif attr.lower() == 'column' or attr.lower() == 'col':
+            return celllist([celllist([self.__cells[row][column] for column in range(self.columns)]) for row in range(self.rows)])
+        elif a == 'column' or a == 'col':
             print('col')
             return celllist([celllist([self.__cells[row][column] for row in range(self.rows)]) for column in range(self.columns)])
-        elif attr.lower() == 'selected':
+        elif a == 'selected':
             print('selected')
             return celllist(self.__selected_cells)
         else:
@@ -924,10 +924,10 @@ class celllist(list):
 
     @property
     def formula_value(self):
-        formulas = []
+        formulas = formulalist()
         for item in self:
-            if isinstance(item, celllist):
-                formulas.append([subitem.formula_value for subitem in item])
+            if isinstance(item, formulalist):
+                formulas.append(formulalist([subitem.formula_value for subitem in item]))
             else: # isinstance(item, _Cell)
                 formulas.append(item.formula_value)
             return formulas
@@ -935,12 +935,28 @@ class celllist(list):
 
     @formula_value.setter
     def formula_value(self, formula_value):
-        for item in self:
-            item.formula_value = formula_value
+        if isinstance(formula_value, formulalist):
+            if len(formula_value) == len(self):
+                for idx, item in enumerate(self):
+                    item.formula_value = formula_value[idx]
+        else:
+            for item in self:
+                item.formula_value = formula_value
+
 
     def config(self, **options):
         for item in self:
             item.config(**options)
+
+    def shape(self, filler):
+        l = celllist([None for i in range(len(self))])
+        for idx in range(len(self)):
+            if isinstance(self[idx], celllist):
+                l[idx] = self[idx].shape(filler)
+            else:
+                l[idx] = filler
+        return l
+
     
     def __sub__(self, other):
         return [item for item in self if item not in other]
@@ -957,3 +973,7 @@ class celllist(list):
             return super().__getitem__(slce)
 
         return super().__getitem__(index)
+
+
+class formulalist(list):
+    pass
