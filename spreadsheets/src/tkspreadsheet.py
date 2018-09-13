@@ -3,6 +3,8 @@ import re
 
 import importlib
 
+import matplotlib.pyplot as plt
+
 from tkinter import messagebox, filedialog
 
 import src.utils as utils
@@ -918,6 +920,32 @@ class Spreadsheet(tk.Frame):
         elif isinstance(index, int):
             row = index
             return celllist([self.__cells[row][column] for column in range(self.columns)])
+
+    def set_formula(self, cells, value):
+        cells.formula_value = value
+
+    def get_formula(self, cells):
+        return cells.formula_value
+
+    def plot(self, x=[], y=[], xlabel='x', ylabel='y', title=None, showgrid=False):
+        if len(x) != len(y):
+            raise IndexError('x- and y-lists must be of the same length')
+        # Throw an exception if not all of the values are integers
+        for idx, xi in enumerate(x):
+            if type(xi) == self._Cell:
+                x[idx] = xi.computed_value
+                try:
+                    float(x[idx])
+                except ValueError:
+                    raise ValueError('x element at index ' + str(idx) '')
+        plt.plot(x, y, 'ro')
+        plt.xlabel(str(xlabel))
+        plt.ylabel(str(ylabel))
+        if not title:
+            title = str(ylabel) + ' vs. ' + str(xlabel)
+        plt.title(str(title))
+        plt.show()
+
 
 class elist(list):
     def shape(self, filler, wrapperlist=list):
