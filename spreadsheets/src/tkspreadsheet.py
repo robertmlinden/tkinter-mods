@@ -946,7 +946,9 @@ class celllist(elist):
 
     @formula_value.setter
     def formula_value(self, formula_value):
-        if isinstance(formula_value, formulalist):
+        if isinstance(formula_value, zip):
+            formula_value = formulalist(formula_value)
+        if isinstance(formula_value, list):
             if len(formula_value) == len(self):
                 for idx, item in enumerate(self):
                     item.formula_value = formula_value[idx]
@@ -978,8 +980,15 @@ class celllist(elist):
             return super().__getitem__(slce)
 
         return super().__getitem__(index)
-    
 
+
+    def __getattr__(self, attr):
+        a = attr.lower()
+
+        if a == 'col' or a == 'column':
+            return [item[a] if isinstance(item, list) else item.coordinates[1] for item in self]
+        elif a == 'row':
+            return [item[a] if isinstance(item, list) else item.coordinates[0] for item in self]
 
 class formulalist(elist):
 
@@ -987,7 +996,7 @@ class formulalist(elist):
         return super().shape(filler, wrapperlist=formulalist)
 
     def __add__(self, other):
-        if type(other) == formulalist and self.shape(1) == self.shape(1):
+        if isinstance(other, list) and self.shape(1) == self.shape(1):
             flist = formulalist([None for i in range(len(self))])
             for idx in range(len(self)):
                 flist[idx] = self[idx] + other[idx]
