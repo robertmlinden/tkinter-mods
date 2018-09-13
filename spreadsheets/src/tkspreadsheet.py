@@ -919,18 +919,29 @@ class Spreadsheet(tk.Frame):
             row = index
             return celllist([self.__cells[row][column] for column in range(self.columns)])
 
+class elist(list):
+    def shape(self, filler, wrapperlist=list):
+        l = wrapperlist([None for i in range(len(self))])
+        for idx in range(len(self)):
+            if isinstance(self[idx], wrapperlist):
+                l[idx] = self[idx].shape(filler)
+            else:
+                l[idx] = filler
+        return l
 
-class celllist(list):
+
+class celllist(elist):
 
     @property
     def formula_value(self):
         formulas = formulalist()
         for item in self:
-            if isinstance(item, formulalist):
+            if isinstance(item, celllist):
+                print('celllist')
                 formulas.append(formulalist([subitem.formula_value for subitem in item]))
             else: # isinstance(item, _Cell)
                 formulas.append(item.formula_value)
-            return formulas
+        return formulas
 
 
     @formula_value.setter
@@ -949,13 +960,7 @@ class celllist(list):
             item.config(**options)
 
     def shape(self, filler):
-        l = celllist([None for i in range(len(self))])
-        for idx in range(len(self)):
-            if isinstance(self[idx], celllist):
-                l[idx] = self[idx].shape(filler)
-            else:
-                l[idx] = filler
-        return l
+        return super().shape(filler, wrapperlist=celllist)
 
     
     def __sub__(self, other):
@@ -973,7 +978,28 @@ class celllist(list):
             return super().__getitem__(slce)
 
         return super().__getitem__(index)
+    
 
 
-class formulalist(list):
-    pass
+class formulalist(elist):
+
+    def shape(self, filler):
+        return super().shape(filler, wrapperlist=formulalist)
+
+    def __add__(self, other):
+        if type(other) == formulalist and self.shape(1) == self.shape(1):
+            flist = formulalist([None for i in range(len(self))])
+            for idx in range(len(self)):
+                flist[idx] = self[idx] + other[idx]
+            print(flist)
+            return flist
+        else:
+            return self + self.shape(other)
+
+    def __radd__(self, other):
+        return self + other
+
+    def __iadd__(self, other):
+        return self + other
+
+
