@@ -992,7 +992,7 @@ class celllist(elist):
     @formula_value.setter
     def formula_value(self, formula_value):
         if isinstance(formula_value, zip):
-            formula_value = formulalist(formula_value)
+            formula_value = celllist(formula_value)
         if isinstance(formula_value, list):
             if len(formula_value) == len(self):
                 for idx, item in enumerate(self):
