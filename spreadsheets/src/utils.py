@@ -56,7 +56,6 @@ def convert_coordinates_from_negative(rows, columns, row, column):
         row = rows + row
     if column < 0:
         column = columns + column
-    print(row, column)
     return row, column
 
 def normalize_cell_notation(rows, columns, cell, column=None):

@@ -138,10 +138,8 @@ class Spreadsheet(tk.Frame):
 
         def __update_display(self):
             if self.__mode == 'formula':
-                print('update formula')
                 self.sv.set(self.__formula_value)
             else:
-                print('update compute')
                 self.sv.set(str(self.__computed_value))
 
         def mode(self, _mode):
@@ -221,7 +219,6 @@ class Spreadsheet(tk.Frame):
             for column in range(self.columns):
                 index = (row, column)
                 c = self._Cell(self, cell_index = utils.get_cell_index(row, column), spreadsheet = self)
-                print(utils.get_cell_index(row, column))
                 c.grid(row=row+1, column=column+1, stick="nsew")
                 c.config(justify="left", state='disabled', cursor='plus', highlightthickness = 1, highlightbackground = 'ghost white',
                             disabledbackground='white', highlightcolor = 'anchor', fg='black', disabledforeground='#101010')
@@ -792,7 +789,9 @@ class Spreadsheet(tk.Frame):
         if len(self.__selected_cells) == 1:
             self.__right(wrap=True)
         elif len(self.__selected_cells) > 1:
-            pass
+            selected_anchor_cell_index = self.__selected_cells.index(self.__anchor_cell)
+            new_index = (selected_anchor_cell_index + 1) % len(self.__selected_cells)
+            self.__set_anchor(self.__selected_cells[new_index])
         else:
             pass
 
@@ -832,8 +831,6 @@ class Spreadsheet(tk.Frame):
         active_macro_fullpath = filedialog.askopenfilename(title='Create Macro File', initialdir=os.path.join(self.program_paths['index'], 'macros'), filetypes=[('Python File', '*.py')])
 
         self.active_macro_name = os.path.split(active_macro_fullpath)[-1]
-
-        print(active_macro_fullpath)
 
         macro_import_init_file = os.path.join(self.program_paths['index'], 'macros', '__init__.py')
 
@@ -982,7 +979,6 @@ class celllist(elist):
         formulas = formulalist()
         for item in self:
             if isinstance(item, celllist):
-                print('celllist')
                 formulas.append(formulalist([subitem.formula_value for subitem in item]))
             else: # isinstance(item, _Cell)
                 formulas.append(item.formula_value)
@@ -991,7 +987,7 @@ class celllist(elist):
 
     @formula_value.setter
     def formula_value(self, formula_value):
-        if isinstance(formula_value, zip):
+        if isinstance(formula_value, zip) or type(formula_value) == tuple:
             formula_value = celllist(formula_value)
         if isinstance(formula_value, list):
             if len(formula_value) == len(self):
@@ -1032,30 +1028,84 @@ class celllist(elist):
         a = attr.lower()
 
         if a == 'col' or a == 'column':
-            return [item[a] if isinstance(item, list) else item.coordinates[1] for item in self]
+            return formulalist([item[a] if isinstance(item, list) else item.coordinates[1] for item in self])
         elif a == 'row':
-            print(repr(self))
-            return [item.__getattr__(attr) if isinstance(item, list) else item.coordinates[0] for item in self]
+            return formulalist([item.__getattr__(attr) if isinstance(item, list) else item.coordinates[0] for item in self])
+
+
+import operator as op
 
 class formulalist(elist):
 
     def shape(self, filler):
         return super().shape(filler, wrapperlist=formulalist)
 
-    def __add__(self, other):
-        if isinstance(other, list) and self.shape(1) == self.shape(1):
+    def combine(self, other, operator):
+        if isinstance(other, celllist):
+            other = other.formula_value
+        if isinstance(other, formulalist) and self.shape(1) == self.shape(1):
             flist = formulalist([None for i in range(len(self))])
             for idx in range(len(self)):
-                flist[idx] = self[idx] + other[idx]
-            print(flist)
+                flist[idx] = operator(self[idx], other[idx])
             return flist
         else:
-            return self + self.shape(other)
+            return operator(self, self.shape(other))
+
+
+    def __add__(self, other):
+        return self.combine(other, op.add)
 
     def __radd__(self, other):
         return self + other
 
     def __iadd__(self, other):
         return self + other
+
+
+    def __sub__(self, other):
+        return self.combine(other, op.sub)
+
+    def __rsub__(self, other):
+        return -1 * (self - other)
+
+    def __isub__(self, other):
+        return self - other
+
+    def merge(self, other, operator):
+        try:
+            other = float(other.formula_value)
+        except (AttributeError, TypeError):
+            pass
+        if isinstance(other, list) or isinstance(other, int) or isinstance(other, float):
+            return self.combine(other, operator)
+
+    def __mul__(self, other):
+        return self.merge(other, op.mul)
+
+    def __rmul__(self, other):
+        return self * other
+
+    def __imul__(self, other):
+        return self * other
+
+    def inverse(self):
+        return [item.inverse() if isinstance(item, list) else 1 / item for item in self]
+
+    def __div__(self, other):
+        return self.merge(other, op.div)
+
+    def __rdiv__(self, other):
+        return self.inverse() * other
+
+    def __idiv__(self, other):
+        return self / other
+
+    def __pow__(self, other):
+        return self.merge(other, op.pow)
+
+    def __ipow__(self, other):
+        return self ** other
+
+
 
 
