@@ -789,9 +789,7 @@ class Spreadsheet(tk.Frame):
         if len(self.__selected_cells) == 1:
             self.__right(wrap=True)
         elif len(self.__selected_cells) > 1:
-            selected_anchor_cell_index = self.__selected_cells.index(self.__anchor_cell)
-            new_index = (selected_anchor_cell_index + 1) % len(self.__selected_cells)
-            self.__set_anchor(self.__selected_cells[new_index])
+            pass
         else:
             pass
 
